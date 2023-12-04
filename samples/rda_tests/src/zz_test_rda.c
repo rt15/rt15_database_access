@@ -17,7 +17,7 @@ the_end:
 	return;
 }
 
-static rt_s zz_execute_statement(rt_char8 *sql, struct da_statement *statement, struct da_connection *connection, rt_b ignore_errors)
+static rt_s zz_execute_statement(rt_char8 *sql, struct da_statement *statement, rt_b ignore_errors)
 {
 	rt_char buffer[RT_CHAR_HALF_BIG_STRING_SIZE];
 	rt_un buffer_size;
@@ -30,7 +30,7 @@ static rt_s zz_execute_statement(rt_char8 *sql, struct da_statement *statement, 
 	if (RT_UNLIKELY(!rt_console_write_string_with_size(buffer, buffer_size))) goto error;
 
 	if (RT_UNLIKELY(!statement->execute(statement, sql) && !ignore_errors)) {
-		zz_display_last_error(&connection->last_error_message_provider, _R("Statement execution failed"));
+		zz_display_last_error(&statement->last_error_message_provider, _R("Statement execution failed"));
 		goto error;
 	}
 
@@ -43,31 +43,39 @@ error:
 	goto free;
 }
 
-static rt_s zz_test_statement(struct da_statement *statement, struct da_connection *connection)
+static rt_s zz_test_statement(struct da_statement *statement, struct da_connection *connection, enum da_database_type database_type)
 {
 	rt_un row_count;
 	rt_s ret;
 
-	if (RT_UNLIKELY(!zz_execute_statement("drop table RDA_TESTS_TABLE", statement, connection, RT_TRUE))) goto error;
-	if (RT_UNLIKELY(!zz_execute_statement("create table RDA_TESTS_TABLE (VAL varchar2(200))", statement, connection, RT_FALSE))) goto error;
+	switch (database_type) {
+	case DA_DATABASE_TYPE_ORACLE:
+		if (RT_UNLIKELY(!zz_execute_statement("drop table RDA_TESTS_TABLE", statement, RT_TRUE))) goto error;
+		if (RT_UNLIKELY(!zz_execute_statement("create table RDA_TESTS_TABLE (VAL varchar2(200))", statement, RT_FALSE))) goto error;
+		break;
+	case DA_DATABASE_TYPE_POSTGRES:
+		if (RT_UNLIKELY(!zz_execute_statement("drop table if exists RDA_TESTS_TABLE", statement, RT_FALSE))) goto error;
+		if (RT_UNLIKELY(!zz_execute_statement("create table RDA_TESTS_TABLE (VAL varchar(200))", statement, RT_FALSE))) goto error;
+		break;
+	}
 
-	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('1')", statement, connection, RT_FALSE))) goto error;
-	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('2')", statement, connection, RT_FALSE))) goto error;
-	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('2')", statement, connection, RT_FALSE))) goto error;
+	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('1')", statement, RT_FALSE))) goto error;
+	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('2')", statement, RT_FALSE))) goto error;
+	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('2')", statement, RT_FALSE))) goto error;
 
 	if (RT_UNLIKELY(!connection->commit(connection))) goto error;
 
-	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('2')", statement, connection, RT_FALSE))) goto error;
+	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('2')", statement, RT_FALSE))) goto error;
 
 	if (RT_UNLIKELY(!connection->rollback(connection))) goto error;
 
-	if (RT_UNLIKELY(!zz_execute_statement("update RDA_TESTS_TABLE set VAL = '3' where VAL = '2'", statement, connection, RT_FALSE))) goto error;
+	if (RT_UNLIKELY(!zz_execute_statement("update RDA_TESTS_TABLE set VAL = '3' where VAL = '2'", statement, RT_FALSE))) goto error;
 	if (RT_UNLIKELY(!statement->get_row_count(statement, &row_count))) goto error;
 	if (RT_UNLIKELY(row_count != 2)) goto error;
 
 	if (RT_UNLIKELY(!connection->commit(connection))) goto error;
 
-	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('333')", statement, connection, RT_FALSE))) goto error;
+	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('333')", statement, RT_FALSE))) goto error;
 
 	ret = RT_OK;
 free:
@@ -78,7 +86,7 @@ error:
 	goto free;
 }
 
-static rt_s zz_test_connection(struct da_connection *connection)
+static rt_s zz_test_connection(struct da_connection *connection, enum da_database_type database_type)
 {
 	struct da_statement statement;
 	rt_b statement_created = RT_FALSE;
@@ -96,7 +104,7 @@ static rt_s zz_test_connection(struct da_connection *connection)
 		goto error;
 	statement_created = RT_TRUE;
 
-	if (RT_UNLIKELY(!zz_test_statement(&statement, connection)))
+	if (RT_UNLIKELY(!zz_test_statement(&statement, connection, database_type)))
 		goto error;
 
 	ret = RT_OK;
@@ -113,7 +121,7 @@ error:
 	goto free;
 }
 
-static rt_s zz_test_data_source(struct da_data_source *data_source)
+static rt_s zz_test_data_source(struct da_data_source *data_source, enum da_database_type database_type)
 {
 	struct da_connection connection;
 	rt_b connection_created = RT_FALSE;
@@ -128,7 +136,7 @@ static rt_s zz_test_data_source(struct da_data_source *data_source)
 		goto error;
 	connection_created = RT_TRUE;
 
-	if (!zz_test_connection(&connection))
+	if (!zz_test_connection(&connection, database_type))
 		goto error;
 
 	ret = RT_OK;
@@ -145,7 +153,7 @@ error:
 	goto free;
 }
 
-static rt_s zz_test_driver(struct da_driver *driver, const rt_char8 *host_name, rt_un port, const rt_char8 *database, const rt_char8 *user_name, const rt_char8 *password)
+static rt_s zz_test_driver(struct da_driver *driver, const rt_char8 *host_name, rt_un port, const rt_char8 *database, const rt_char8 *user_name, const rt_char8 *password, enum da_database_type database_type)
 {
 	struct da_data_source data_source;
 	rt_b data_source_created = RT_FALSE;
@@ -155,7 +163,7 @@ static rt_s zz_test_driver(struct da_driver *driver, const rt_char8 *host_name, 
 		goto error;
 	data_source_created = RT_TRUE;
 
-	if (RT_UNLIKELY(!zz_test_data_source(&data_source)))
+	if (RT_UNLIKELY(!zz_test_data_source(&data_source, database_type)))
 		goto error;
 
 	ret = RT_OK;
@@ -172,7 +180,7 @@ error:
 	goto free;
 }
 
-rt_s zz_test_rda(const rt_char8 *host_name, rt_un port, const rt_char8 *database, const rt_char8 *user_name, const rt_char8 *password)
+rt_s zz_test_rda(const rt_char8 *host_name, rt_un port, const rt_char8 *database, const rt_char8 *user_name, const rt_char8 *password, enum da_database_type database_type)
 {
 	struct da_driver driver;
 	rt_b driver_created = RT_FALSE;
@@ -181,11 +189,11 @@ rt_s zz_test_rda(const rt_char8 *host_name, rt_un port, const rt_char8 *database
 	if (RT_UNLIKELY(!rt_console_write_string(_R("Connecting...\n"))))
 		goto error;
 
-	if (RT_UNLIKELY(!da_oracle_driver_create(&driver)))
+	if (RT_UNLIKELY(!da_driver_manager_create_driver(&driver, database_type)))
 		goto error;
 	driver_created = RT_TRUE;
 
-	if (RT_UNLIKELY(!zz_test_driver(&driver, host_name, port, database, user_name, password)))
+	if (RT_UNLIKELY(!zz_test_driver(&driver, host_name, port, database, user_name, password, database_type)))
 		goto error;
 
 	ret = RT_OK;

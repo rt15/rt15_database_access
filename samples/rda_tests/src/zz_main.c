@@ -1,5 +1,6 @@
 #include <rpr.h>
 #include <rpr_main.h>
+#include <rda.h>
 
 #define ZZ_SETTING_SIZE 256
 
@@ -9,9 +10,10 @@ struct zz_settings {
 	const rt_char *database;
 	const rt_char *user_name;
 	const rt_char *password;
+	const rt_char *database_type;
 };
 
-rt_s zz_test_rda(const rt_char8 *host_name, rt_un port, const rt_char8 *database, const rt_char8 *user_name, const rt_char8 *password);
+rt_s zz_test_rda(const rt_char8 *host_name, rt_un port, const rt_char8 *database, const rt_char8 *user_name, const rt_char8 *password, enum da_database_type database_type);
 
 static void zz_unknown_parameter(const rt_char *parameter_name, rt_un parameter_name_size)
 {
@@ -95,6 +97,10 @@ static rt_s zz_handle_short_parameter(rt_char short_option, const rt_char *value
 		if (RT_UNLIKELY(!zz_handle_parameter(_R("password"), value, &settings->password)))
 			goto error;
 		break;
+	case _R('t'):
+		if (RT_UNLIKELY(!zz_handle_parameter(_R("database-type"), value, &settings->database_type)))
+			goto error;
+		break;
 	default:
 		zz_unknown_parameter(&short_option, 1);
 		goto error;
@@ -133,6 +139,9 @@ static rt_s zz_handle_long_parameter(const rt_char *long_option, const rt_char *
 			goto error;
 	} else if (rt_char_equals(long_option, long_option_size, _R("password"), 8)) {
 		if (RT_UNLIKELY(!zz_handle_parameter(long_option, value, &settings->password)))
+			goto error;
+	} else if (rt_char_equals(long_option, long_option_size, _R("database-type"), 13)) {
+		if (RT_UNLIKELY(!zz_handle_parameter(long_option, value, &settings->database_type)))
 			goto error;
 	} else {
 		zz_unknown_parameter(long_option, long_option_size);
@@ -211,7 +220,7 @@ error:
 
 static rt_s zz_parse_args(rt_un argc, const rt_char *argv[])
 {
-	const rt_char *long_options_with_arg[6];
+	const rt_char *long_options_with_arg[7];
 	rt_un non_option_index;
 	struct zz_settings settings;
 	rt_char8 host_name[ZZ_SETTING_SIZE];
@@ -219,8 +228,10 @@ static rt_s zz_parse_args(rt_un argc, const rt_char *argv[])
 	rt_char8 database[ZZ_SETTING_SIZE];
 	rt_char8 user_name[ZZ_SETTING_SIZE];
 	rt_char8 password[ZZ_SETTING_SIZE];
+	enum da_database_type database_type;
 	rt_char buffer[RT_CHAR_HALF_BIG_STRING_SIZE];
 	rt_un buffer_size;
+	rt_un database_type_size;
 	rt_s ret;
 
 	long_options_with_arg[0] = _R("host-name");
@@ -228,12 +239,13 @@ static rt_s zz_parse_args(rt_un argc, const rt_char *argv[])
 	long_options_with_arg[2] = _R("database");
 	long_options_with_arg[3] = _R("user-name");
 	long_options_with_arg[4] = _R("password");
-	long_options_with_arg[5] = RT_NULL;
+	long_options_with_arg[5] = _R("database-type");
+	long_options_with_arg[6] = RT_NULL;
 
 	rt_memory_zero(&settings, sizeof(struct zz_settings));
 
 	if (RT_UNLIKELY(!rt_command_line_args_parse(&argc, argv, &zz_command_line_args_parse_callback, &settings, RT_NULL, RT_NULL,
-						    _R("hPdup"), RT_NULL, RT_NULL, long_options_with_arg, &non_option_index)))
+						    _R("hPdupt"), RT_NULL, RT_NULL, long_options_with_arg, &non_option_index)))
 		goto error;
 
 	if (RT_UNLIKELY(!settings.port)) {
@@ -256,13 +268,33 @@ static rt_s zz_parse_args(rt_un argc, const rt_char *argv[])
 	if (RT_UNLIKELY(!zz_prepare_arg(_R("user-name"), settings.user_name, user_name))) goto error;
 	if (RT_UNLIKELY(!zz_prepare_arg(_R("password"), settings.password, password))) goto error;
 
+	if (RT_UNLIKELY(!settings.database_type)) {
+		rt_console_write_error(_R("Missing database type parameter."));
+		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
+		goto error;
+	}
+
+	database_type_size = rt_char_get_size(settings.database_type);
+	if (rt_char_equals(settings.database_type, database_type_size, _R("ORACLE"), 6)) {
+		database_type = DA_DATABASE_TYPE_ORACLE;
+	} else if (rt_char_equals(settings.database_type, database_type_size, _R("POSTGRES"), 8)) {
+		database_type = DA_DATABASE_TYPE_POSTGRES;
+	} else {
+		buffer_size = 23;
+		if (RT_UNLIKELY(!rt_char_copy(_R("Unknown database type \""), buffer_size, buffer, RT_CHAR_HALF_BIG_STRING_SIZE))) goto error;
+		if (RT_UNLIKELY(!rt_char_append(settings.database_type, database_type_size, buffer, RT_CHAR_HALF_BIG_STRING_SIZE, &buffer_size))) goto error;
+		if (RT_UNLIKELY(!rt_char_append(_R("\". Supported types: ORACLE and POSTGRES."), 40, buffer, RT_CHAR_HALF_BIG_STRING_SIZE, &buffer_size))) goto error;
+		if (RT_UNLIKELY(!rt_console_write_error_with_size(buffer, buffer_size))) goto error;
+		goto error;
+	}
+
 	if (RT_UNLIKELY(non_option_index != RT_TYPE_MAX_UN)) {
 		rt_console_write_error(_R("Non options are not supported."));
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		goto error;
 	}
 
-	if (RT_UNLIKELY(!zz_test_rda(host_name, port, database, user_name, password)))
+	if (RT_UNLIKELY(!zz_test_rda(host_name, port, database, user_name, password, database_type)))
 		goto error;
 
 	ret = RT_OK;
@@ -292,7 +324,7 @@ static rt_s zz_main(rt_un argc, const rt_char *argv[])
 	}
 
 	if (display_help) {
-		if (RT_UNLIKELY(!rt_console_write_string(_R("rda_tests <-h|--host-name> HOST_NAME <-P|--port> PORT <-d|--database> DATABASE <-u|--user-name> USER_NAME <-p|--password> PASSWORD\n"))))
+		if (RT_UNLIKELY(!rt_console_write_string(_R("rda_tests <-h|--host-name> HOST_NAME <-P|--port> PORT <-d|--database> DATABASE <-u|--user-name> USER_NAME <-p|--password> PASSWORD <-t|--database-type> DATABASE_TYPE\n"))))
 			goto error;
 
 	} else {

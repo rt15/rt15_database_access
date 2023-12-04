@@ -13,11 +13,9 @@ rt_s da_oracle_data_source_open(struct da_data_source *data_source)
 	sword status;
 	rt_s ret;
 
-	if (data_source->opened) {
+	if (RT_UNLIKELY(data_source->opened)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		data_source->u.oracle.last_error_status = OCI_ERROR;
-		data_source->u.oracle.last_error_handle = RT_NULL;
-		data_source->u.oracle.last_error_handle_type = 0;
+		data_source->u.oracle.last_error_is_oracle = RT_FALSE;
 		goto error;
 	}
 
@@ -25,6 +23,7 @@ rt_s da_oracle_data_source_open(struct da_data_source *data_source)
 	status = OCIServerAttach(server_handle, error_handle, (OraText*)db_link, db_link_size, OCI_DEFAULT);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		data_source->u.oracle.last_error_is_oracle = RT_TRUE;
 		data_source->u.oracle.last_error_status = status;
 		data_source->u.oracle.last_error_handle = error_handle;
 		data_source->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
@@ -54,11 +53,9 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	sword status;
 	rt_s ret;
 
-	if (!data_source->opened) {
+	if (RT_UNLIKELY(!data_source->opened)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		data_source->u.oracle.last_error_status = OCI_ERROR;
-		data_source->u.oracle.last_error_handle = RT_NULL;
-		data_source->u.oracle.last_error_handle_type = 0;
+		data_source->u.oracle.last_error_is_oracle = RT_FALSE;
 		goto error;
 	}
 
@@ -80,6 +77,7 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	status = OCIHandleAlloc(environment_handle, (void**)&error_handle, OCI_HTYPE_ERROR, 0, NULL);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		data_source->u.oracle.last_error_is_oracle = RT_TRUE;
 		data_source->u.oracle.last_error_status = status;
 		data_source->u.oracle.last_error_handle = environment_handle;
 		data_source->u.oracle.last_error_handle_type = OCI_HTYPE_ENV;
@@ -91,6 +89,7 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	status = OCIHandleAlloc(environment_handle, (void**)&service_context_handle, OCI_HTYPE_SVCCTX, 0, NULL);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		data_source->u.oracle.last_error_is_oracle = RT_TRUE;
 		data_source->u.oracle.last_error_status = status;
 		data_source->u.oracle.last_error_handle = environment_handle;
 		data_source->u.oracle.last_error_handle_type = OCI_HTYPE_ENV;
@@ -102,6 +101,7 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	status = OCIAttrSet(service_context_handle, OCI_HTYPE_SVCCTX, server_handle, 0, OCI_ATTR_SERVER, data_source->u.oracle.error_handle);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		data_source->u.oracle.last_error_is_oracle = RT_TRUE;
 		data_source->u.oracle.last_error_status = status;
 		data_source->u.oracle.last_error_handle = data_source->u.oracle.error_handle;
 		data_source->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
@@ -112,6 +112,7 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	status = OCIHandleAlloc(environment_handle, (void**)&session_handle, OCI_HTYPE_SESSION, 0, NULL);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		data_source->u.oracle.last_error_is_oracle = RT_TRUE;
 		data_source->u.oracle.last_error_status = status;
 		data_source->u.oracle.last_error_handle = environment_handle;
 		data_source->u.oracle.last_error_handle_type = OCI_HTYPE_ENV;
@@ -123,6 +124,7 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	status = OCIAttrSet(session_handle, OCI_HTYPE_SESSION, data_source->user_name, data_source->user_name_size, OCI_ATTR_USERNAME, data_source->u.oracle.error_handle);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		data_source->u.oracle.last_error_is_oracle = RT_TRUE;
 		data_source->u.oracle.last_error_status = status;
 		data_source->u.oracle.last_error_handle = data_source->u.oracle.error_handle;
 		data_source->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
@@ -133,6 +135,7 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	status = OCIAttrSet(session_handle, OCI_HTYPE_SESSION, data_source->password, data_source->password_size, OCI_ATTR_PASSWORD, data_source->u.oracle.error_handle);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		data_source->u.oracle.last_error_is_oracle = RT_TRUE;
 		data_source->u.oracle.last_error_status = status;
 		data_source->u.oracle.last_error_handle = data_source->u.oracle.error_handle;
 		data_source->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
@@ -172,6 +175,7 @@ rt_s da_oracle_data_source_free(struct da_data_source *data_source)
 		status = OCIServerDetach(data_source->u.oracle.server_handle, data_source->u.oracle.error_handle, OCI_DEFAULT);
 		if (RT_UNLIKELY(status != OCI_SUCCESS && ret)) {
 			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+			data_source->u.oracle.last_error_is_oracle = RT_TRUE;
 			data_source->u.oracle.last_error_status = status;
 			data_source->u.oracle.last_error_handle = RT_NULL;
 			data_source->u.oracle.last_error_handle_type = 0;
@@ -182,6 +186,7 @@ rt_s da_oracle_data_source_free(struct da_data_source *data_source)
 	status = OCIHandleFree(data_source->u.oracle.server_handle, OCI_HTYPE_SERVER);
 	if (RT_UNLIKELY(status != OCI_SUCCESS && ret)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		data_source->u.oracle.last_error_is_oracle = RT_TRUE;
 		data_source->u.oracle.last_error_status = status;
 		data_source->u.oracle.last_error_handle = RT_NULL;
 		data_source->u.oracle.last_error_handle_type = 0;
@@ -191,6 +196,7 @@ rt_s da_oracle_data_source_free(struct da_data_source *data_source)
 	status = OCIHandleFree(data_source->u.oracle.error_handle, OCI_HTYPE_ERROR);
 	if (RT_UNLIKELY(status != OCI_SUCCESS && ret)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		data_source->u.oracle.last_error_is_oracle = RT_TRUE;
 		data_source->u.oracle.last_error_status = status;
 		data_source->u.oracle.last_error_handle = RT_NULL;
 		data_source->u.oracle.last_error_handle_type = 0;
@@ -204,5 +210,5 @@ rt_s da_oracle_data_source_append_last_error_message(struct da_last_error_messag
 {
 	struct da_data_source *data_source = RT_MEMORY_CONTAINER_OF(last_error_message_provider, struct da_data_source, last_error_message_provider);
 
-	return da_oracle_utils_append_error_message(data_source->u.oracle.last_error_status, data_source->u.oracle.last_error_handle, data_source->u.oracle.last_error_handle_type, buffer, buffer_capacity, buffer_size);
+	return da_oracle_utils_append_error_message(data_source->u.oracle.last_error_is_oracle, data_source->u.oracle.last_error_status, data_source->u.oracle.last_error_handle, data_source->u.oracle.last_error_handle_type, buffer, buffer_capacity, buffer_size);
 }

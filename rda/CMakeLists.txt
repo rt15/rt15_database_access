@@ -32,12 +32,16 @@ include_directories(include)
 
 include_directories(${PARENT_DIR}/rt15_portable_runtime/rpr/include)
 include_directories(${PARENT_DIR}/libs/oracle/win64/include)
+include_directories(${PARENT_DIR}/libs/postgres/win64/include)
 
 link_directories(${PARENT_DIR}/rt15_portable_runtime/rpr/lib)
 link_directories(${PARENT_DIR}/libs/oracle/win64/lib/msvc)
+link_directories(${PARENT_DIR}/libs/postgres/win64/lib)
 
 link_libraries(rpr${BINARY_SUFFIX})
 link_libraries(oci)
+link_libraries(pq)
+link_libraries(ws2_32)
 
 file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c")
 

@@ -4,7 +4,12 @@
 #include <rpr.h>
 
 #define DA_IDENTIFIER_SIZE 64
-#define DA_DB_LINK_SIZE 256
+#define DA_DB_SIZE 256
+
+enum da_database_type {
+	DA_DATABASE_TYPE_ORACLE,
+	DA_DATABASE_TYPE_POSTGRES
+};
 
 struct da_last_error_message_provider;
 
@@ -27,11 +32,15 @@ struct da_statement {
 	da_statement_execute_t execute;
 	da_statement_get_row_count_t get_row_count;
 	da_statement_free_t free;
+	struct da_last_error_message_provider last_error_message_provider;
 	struct da_connection *connection;
 	union {
 		struct {
 			void *statement_handle;
 		} oracle;
+		struct {
+			void *pg_result;
+		} postgres;
 	} u;
 };
 
@@ -56,10 +65,15 @@ struct da_connection {
 			void *error_handle;
 			void *service_context_handle;
 			void *session_handle;
+			rt_b last_error_is_oracle;
 			rt_n32 last_error_status;
 			void *last_error_handle;
 			rt_un32 last_error_handle_type;
 		} oracle;
+		struct {
+			void *pg_conn;
+			rt_b last_error_is_postgres;
+		} postgres;
 	} u;
 };
 
@@ -82,12 +96,20 @@ struct da_data_source {
 		struct {
 			void *error_handle;
 			void *server_handle;
-			rt_char8 db_link[DA_DB_LINK_SIZE];
+			rt_char8 db_link[DA_DB_SIZE];
 			rt_un db_link_size;
+			rt_b last_error_is_oracle;
 			rt_n32 last_error_status;
 			void *last_error_handle;
 			rt_un32 last_error_handle_type;
 		} oracle;
+		struct {
+			rt_char8 host_name[DA_IDENTIFIER_SIZE];
+			rt_char8 port[DA_IDENTIFIER_SIZE];
+			rt_char8 dbname[DA_DB_SIZE];
+			const rt_char8 *keywords[6];
+			const rt_char8 *values[6];
+		} postgres;
 	} u;
 };
 
@@ -101,6 +123,7 @@ struct da_driver {
 	union {
 		struct {
 			void *environment_handle;
+			rt_b last_error_is_oracle;
 			rt_n32 last_error_status;
 			void *last_error_handle;
 			rt_un32 last_error_handle_type;
