@@ -24,13 +24,11 @@ struct da_connection;
 struct da_data_source;
 struct da_driver;
 
-typedef rt_s (*da_statement_execute_t)(struct da_statement *statement, const rt_char8 *sql);
-typedef rt_s (*da_statement_get_row_count_t)(struct da_statement *statement, rt_un *row_count);
+typedef rt_s (*da_statement_execute_t)(struct da_statement *statement, const rt_char8 *sql, rt_un *row_count);
 typedef rt_s (*da_statement_free_t)(struct da_statement *statement);
 
 struct da_statement {
 	da_statement_execute_t execute;
-	da_statement_get_row_count_t get_row_count;
 	da_statement_free_t free;
 	struct da_last_error_message_provider last_error_message_provider;
 	struct da_connection *connection;

@@ -3,12 +3,13 @@
 #include "layer000/da_postgres_headers.h"
 #include "layer001/da_postgres_utils.h"
 
-rt_s da_postgres_statement_execute(struct da_statement *statement, const rt_char8 *sql)
+rt_s da_postgres_statement_execute(struct da_statement *statement, const rt_char8 *sql, rt_un *row_count)
 {
 	struct da_connection *connection = statement->connection;
 	PGconn *pg_conn = connection->u.postgres.pg_conn;
 	PGresult *pg_result = RT_NULL;
 	ExecStatusType status;
+	const rt_char8* affected_rows;
 	rt_s ret;
 
 	/* Getting ride of a possible previous result. */
@@ -35,37 +36,17 @@ rt_s da_postgres_statement_execute(struct da_statement *statement, const rt_char
 		goto error;
 	}
 
-	ret = RT_OK;
-free:
-	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
-}
-
-rt_s da_postgres_statement_get_row_count(struct da_statement *statement, rt_un *row_count)
-{
-	struct da_connection *connection = statement->connection;
-	PGresult *pg_result = (PGresult*)statement->u.postgres.pg_result;
-	const rt_char8* affected_rows;
-	rt_s ret;
-
-	if (RT_UNLIKELY(!pg_result)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.postgres.last_error_is_postgres = RT_FALSE;
-		goto error;
-	}
-
-	affected_rows = PQcmdTuples(pg_result);
-	if (RT_UNLIKELY(!rt_char8_get_size(affected_rows))) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.postgres.last_error_is_postgres = RT_FALSE;
-		goto error;
-	}
-	if (RT_UNLIKELY(!rt_char8_convert_to_un(affected_rows, row_count))) {
-		connection->u.postgres.last_error_is_postgres = RT_FALSE;
-		goto error;
+	if (row_count) {
+		affected_rows = PQcmdTuples(pg_result);
+		if (RT_UNLIKELY(!rt_char8_get_size(affected_rows))) {
+			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+			connection->u.postgres.last_error_is_postgres = RT_FALSE;
+			goto error;
+		}
+		if (RT_UNLIKELY(!rt_char8_convert_to_un(affected_rows, row_count))) {
+			connection->u.postgres.last_error_is_postgres = RT_FALSE;
+			goto error;
+		}
 	}
 
 	ret = RT_OK;

@@ -17,7 +17,7 @@ the_end:
 	return;
 }
 
-static rt_s zz_execute_statement(rt_char8 *sql, struct da_statement *statement, rt_b ignore_errors)
+static rt_s zz_execute_statement(rt_char8 *sql, struct da_statement *statement, rt_b ignore_errors, rt_un *row_count)
 {
 	rt_char buffer[RT_CHAR_HALF_BIG_STRING_SIZE];
 	rt_un buffer_size;
@@ -29,7 +29,7 @@ static rt_s zz_execute_statement(rt_char8 *sql, struct da_statement *statement, 
 	if (RT_UNLIKELY(!rt_char_append_char(_R('\n'), buffer, RT_CHAR_HALF_BIG_STRING_SIZE, &buffer_size))) goto error;
 	if (RT_UNLIKELY(!rt_console_write_string_with_size(buffer, buffer_size))) goto error;
 
-	if (RT_UNLIKELY(!statement->execute(statement, sql) && !ignore_errors)) {
+	if (RT_UNLIKELY(!statement->execute(statement, sql, row_count) && !ignore_errors)) {
 		zz_display_last_error(&statement->last_error_message_provider, _R("Statement execution failed"));
 		goto error;
 	}
@@ -50,32 +50,31 @@ static rt_s zz_test_statement(struct da_statement *statement, struct da_connecti
 
 	switch (database_type) {
 	case DA_DATABASE_TYPE_ORACLE:
-		if (RT_UNLIKELY(!zz_execute_statement("drop table RDA_TESTS_TABLE", statement, RT_TRUE))) goto error;
-		if (RT_UNLIKELY(!zz_execute_statement("create table RDA_TESTS_TABLE (VAL varchar2(200))", statement, RT_FALSE))) goto error;
+		if (RT_UNLIKELY(!zz_execute_statement("drop table RDA_TESTS_TABLE", statement, RT_TRUE, RT_NULL))) goto error;
+		if (RT_UNLIKELY(!zz_execute_statement("create table RDA_TESTS_TABLE (VAL varchar2(200))", statement, RT_FALSE, RT_NULL))) goto error;
 		break;
 	case DA_DATABASE_TYPE_POSTGRES:
-		if (RT_UNLIKELY(!zz_execute_statement("drop table if exists RDA_TESTS_TABLE", statement, RT_FALSE))) goto error;
-		if (RT_UNLIKELY(!zz_execute_statement("create table RDA_TESTS_TABLE (VAL varchar(200))", statement, RT_FALSE))) goto error;
+		if (RT_UNLIKELY(!zz_execute_statement("drop table if exists RDA_TESTS_TABLE", statement, RT_FALSE, RT_NULL))) goto error;
+		if (RT_UNLIKELY(!zz_execute_statement("create table RDA_TESTS_TABLE (VAL varchar(200))", statement, RT_FALSE, RT_NULL))) goto error;
 		break;
 	}
 
-	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('1')", statement, RT_FALSE))) goto error;
-	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('2')", statement, RT_FALSE))) goto error;
-	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('2')", statement, RT_FALSE))) goto error;
+	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('1')", statement, RT_FALSE, RT_NULL))) goto error;
+	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('2')", statement, RT_FALSE, RT_NULL))) goto error;
+	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('2')", statement, RT_FALSE, RT_NULL))) goto error;
 
 	if (RT_UNLIKELY(!connection->commit(connection))) goto error;
 
-	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('2')", statement, RT_FALSE))) goto error;
+	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('2')", statement, RT_FALSE, RT_NULL))) goto error;
 
 	if (RT_UNLIKELY(!connection->rollback(connection))) goto error;
 
-	if (RT_UNLIKELY(!zz_execute_statement("update RDA_TESTS_TABLE set VAL = '3' where VAL = '2'", statement, RT_FALSE))) goto error;
-	if (RT_UNLIKELY(!statement->get_row_count(statement, &row_count))) goto error;
+	if (RT_UNLIKELY(!zz_execute_statement("update RDA_TESTS_TABLE set VAL = '3' where VAL = '2'", statement, RT_FALSE, &row_count))) goto error;
 	if (RT_UNLIKELY(row_count != 2)) goto error;
 
 	if (RT_UNLIKELY(!connection->commit(connection))) goto error;
 
-	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('333')", statement, RT_FALSE))) goto error;
+	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('333')", statement, RT_FALSE, RT_NULL))) goto error;
 
 	ret = RT_OK;
 free:

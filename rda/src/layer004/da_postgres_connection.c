@@ -59,7 +59,6 @@ rt_s da_postgres_connection_create_statement(struct da_connection *connection, s
 	statement->connection = connection;
 
 	statement->execute = &da_postgres_statement_execute;
-	statement->get_row_count = &da_postgres_statement_get_row_count;
 	statement->free = &da_postgres_statement_free;
 
 	statement->last_error_message_provider.append = &da_postgres_statement_append_last_error_message;

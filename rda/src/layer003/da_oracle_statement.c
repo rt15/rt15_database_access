@@ -3,7 +3,7 @@
 #include "layer000/da_oracle_headers.h"
 #include "layer001/da_oracle_utils.h"
 
-rt_s da_oracle_statement_execute(struct da_statement *statement, const rt_char8 *sql)
+rt_s da_oracle_statement_execute(struct da_statement *statement, const rt_char8 *sql, rt_un *row_count)
 {
 	OCIStmt *statement_handle = statement->u.oracle.statement_handle;
 	struct da_connection *connection = statement->connection;
@@ -11,6 +11,7 @@ rt_s da_oracle_statement_execute(struct da_statement *statement, const rt_char8 
 	OCISvcCtx *service_context_handle = connection->u.oracle.service_context_handle;
 	sword status;
 	ub4 mode;
+	ub4 oracle_row_count;
 	rt_s ret;
 
 	status = OCIStmtPrepare(statement_handle, error_handle, (OraText*)sql, rt_char8_get_size(sql), OCI_NTV_SYNTAX, OCI_DEFAULT);
@@ -38,35 +39,19 @@ rt_s da_oracle_statement_execute(struct da_statement *statement, const rt_char8 
 		goto error;
 	}
 
-	ret = RT_OK;
-free:
-	return ret;
+	if (row_count) {
+		status = OCIAttrGet(statement_handle, OCI_HTYPE_STMT, &oracle_row_count, 0, OCI_ATTR_ROW_COUNT, error_handle);
+		if (RT_UNLIKELY(status != OCI_SUCCESS)) {
+			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+			connection->u.oracle.last_error_is_oracle = RT_TRUE;
+			connection->u.oracle.last_error_status = status;
+			connection->u.oracle.last_error_handle = error_handle;
+			connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
+			goto error;
+		}
 
-error:
-	ret = RT_FAILED;
-	goto free;
-}
-
-rt_s da_oracle_statement_get_row_count(struct da_statement *statement, rt_un *row_count)
-{
-	OCIStmt *statement_handle = statement->u.oracle.statement_handle;
-	struct da_connection *connection = statement->connection;
-	OCIError *error_handle = connection->u.oracle.error_handle;
-	ub4 oracle_row_count;
-	sword status;
-	rt_s ret;
-
-	status = OCIAttrGet(statement_handle, OCI_HTYPE_STMT, &oracle_row_count, 0, OCI_ATTR_ROW_COUNT, error_handle);
-	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.oracle.last_error_is_oracle = RT_TRUE;
-		connection->u.oracle.last_error_status = status;
-		connection->u.oracle.last_error_handle = error_handle;
-		connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
-		goto error;
+		*row_count = oracle_row_count;
 	}
-
-	*row_count = oracle_row_count;
 
 	ret = RT_OK;
 free:
