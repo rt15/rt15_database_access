@@ -2,16 +2,13 @@
 
 #include "layer000/da_oracle_headers.h"
 #include "layer001/da_oracle_utils.h"
+#include "layer002/da_oracle_result.h"
 
-rt_s da_oracle_statement_execute(struct da_statement *statement, const rt_char8 *sql, rt_un *row_count)
+static rt_s da_oracle_statement_execute_internal(OCIStmt *statement_handle, OCIError *error_handle, struct da_connection *connection, const rt_char8 *sql, ub4 iters)
 {
-	OCIStmt *statement_handle = statement->u.oracle.statement_handle;
-	struct da_connection *connection = statement->connection;
-	OCIError *error_handle = connection->u.oracle.error_handle;
 	OCISvcCtx *service_context_handle = connection->u.oracle.service_context_handle;
 	sword status;
 	ub4 mode;
-	ub4 oracle_row_count;
 	rt_s ret;
 
 	status = OCIStmtPrepare(statement_handle, error_handle, (OraText*)sql, rt_char8_get_size(sql), OCI_NTV_SYNTAX, OCI_DEFAULT);
@@ -29,7 +26,7 @@ rt_s da_oracle_statement_execute(struct da_statement *statement, const rt_char8 
 	else
 		mode = OCI_DEFAULT;
 
-	status = OCIStmtExecute(service_context_handle, statement_handle, error_handle, 1, 0, NULL, NULL, mode);
+	status = OCIStmtExecute(service_context_handle, statement_handle, error_handle, iters, 0, NULL, NULL, mode);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		connection->u.oracle.last_error_is_oracle = RT_TRUE;
@@ -38,6 +35,27 @@ rt_s da_oracle_statement_execute(struct da_statement *statement, const rt_char8 
 		connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
 		goto error;
 	}
+
+	ret = RT_OK;
+free:
+	return ret;
+
+error:
+	ret = RT_FAILED;
+	goto free;
+}
+
+rt_s da_oracle_statement_execute(struct da_statement *statement, const rt_char8 *sql, rt_un *row_count)
+{
+	OCIStmt *statement_handle = statement->u.oracle.statement_handle;
+	struct da_connection *connection = statement->connection;
+	OCIError *error_handle = connection->u.oracle.error_handle;
+	sword status;
+	ub4 oracle_row_count;
+	rt_s ret;
+
+	if (RT_UNLIKELY(!da_oracle_statement_execute_internal(statement_handle, error_handle, connection, sql, 1)))
+		goto error;
 
 	if (row_count) {
 		status = OCIAttrGet(statement_handle, OCI_HTYPE_STMT, &oracle_row_count, 0, OCI_ATTR_ROW_COUNT, error_handle);
@@ -52,6 +70,33 @@ rt_s da_oracle_statement_execute(struct da_statement *statement, const rt_char8 
 
 		*row_count = oracle_row_count;
 	}
+
+	ret = RT_OK;
+free:
+	return ret;
+
+error:
+	ret = RT_FAILED;
+	goto free;
+}
+
+RT_EXPORT rt_s da_oracle_statement_create_result(struct da_statement *statement, struct da_result *result, const rt_char8 *sql)
+{
+	OCIStmt *statement_handle = statement->u.oracle.statement_handle;
+	struct da_connection *connection = statement->connection;
+	OCIError *error_handle = connection->u.oracle.error_handle;
+	rt_s ret;
+
+	result->bind = &da_oracle_result_bind;
+	result->fetch = &da_oracle_result_fetch;
+	result->free = &da_oracle_result_free;
+
+	result->last_error_message_provider.append = &da_oracle_result_append_last_error_message;
+
+	result->statement = statement;
+
+	if (!RT_UNLIKELY(da_oracle_statement_execute_internal(statement_handle, error_handle, connection, sql, 0)))
+		goto error;
 
 	ret = RT_OK;
 free:

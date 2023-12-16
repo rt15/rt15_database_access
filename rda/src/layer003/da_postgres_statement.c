@@ -2,39 +2,55 @@
 
 #include "layer000/da_postgres_headers.h"
 #include "layer001/da_postgres_utils.h"
+#include "layer002/da_postgres_result.h"
 
-rt_s da_postgres_statement_execute(struct da_statement *statement, const rt_char8 *sql, rt_un *row_count)
+static rt_s da_postgres_statement_execute_internal(struct da_connection *connection, const rt_char8 *sql, PGresult **pg_result)
 {
-	struct da_connection *connection = statement->connection;
 	PGconn *pg_conn = connection->u.postgres.pg_conn;
-	PGresult *pg_result = RT_NULL;
+	PGresult *local_pg_result = RT_NULL;
 	ExecStatusType status;
-	const rt_char8* affected_rows;
 	rt_s ret;
 
-	/* Getting ride of a possible previous result. */
-	if (statement->u.postgres.pg_result) {
-		/* PQClear returns void. */
-		PQclear(statement->u.postgres.pg_result);
-		statement->u.postgres.pg_result = RT_NULL;
-	}
+	local_pg_result = PQexec(pg_conn, sql);
 
-	pg_result = PQexec(pg_conn, sql);
-
-	if (RT_UNLIKELY(!pg_result)) {
+	if (RT_UNLIKELY(!local_pg_result)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		connection->u.postgres.last_error_is_postgres = RT_TRUE;
 		goto error;
 	}
 
-	statement->u.postgres.pg_result = pg_result;
-
-	status = PQresultStatus(pg_result);
+	status = PQresultStatus(local_pg_result);
 	if (RT_UNLIKELY(status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		connection->u.postgres.last_error_is_postgres = RT_TRUE;
 		goto error;
 	}
+
+	*pg_result = local_pg_result;
+
+	ret = RT_OK;
+free:
+	return ret;
+
+error:
+	if (local_pg_result)
+		PQclear(local_pg_result);
+
+	ret = RT_FAILED;
+	goto free;
+}
+
+rt_s da_postgres_statement_execute(struct da_statement *statement, const rt_char8 *sql, rt_un *row_count)
+{
+	struct da_connection *connection = statement->connection;
+	PGresult *pg_result;
+	rt_b pg_result_created = RT_FALSE;
+	const rt_char8* affected_rows;
+	rt_s ret;
+
+	if (RT_UNLIKELY(!da_postgres_statement_execute_internal(connection, sql, &pg_result)))
+		goto error;
+	pg_result_created = RT_TRUE;
 
 	if (row_count) {
 		affected_rows = PQcmdTuples(pg_result);
@@ -51,6 +67,11 @@ rt_s da_postgres_statement_execute(struct da_statement *statement, const rt_char
 
 	ret = RT_OK;
 free:
+	if (pg_result_created) {
+		pg_result_created = RT_FALSE;
+		/* PQclear returns void. */
+		PQclear(pg_result);
+	}
 	return ret;
 
 error:
@@ -58,13 +79,43 @@ error:
 	goto free;
 }
 
-rt_s da_postgres_statement_free(struct da_statement *statement)
+rt_s da_postgres_statement_create_result(struct da_statement *statement, struct da_result *result, const rt_char8 *sql)
 {
-	if (statement->u.postgres.pg_result) {
-		/* PQClear returns void. */
-		PQclear(statement->u.postgres.pg_result);
-		statement->u.postgres.pg_result = RT_NULL;
-	}
+	struct da_connection *connection = statement->connection;
+	PGresult *pg_result;
+	rt_b pg_result_created = RT_FALSE;
+	rt_s ret;
+
+	result->bind = &da_postgres_result_bind;
+	result->fetch = &da_postgres_result_fetch;
+	result->free = &da_postgres_result_free;
+
+	result->last_error_message_provider.append = &da_postgres_result_append_last_error_message;
+
+	result->statement = statement;
+
+	if (RT_UNLIKELY(!da_postgres_statement_execute_internal(connection, sql, &pg_result)))
+		goto error;
+	pg_result_created = RT_TRUE;
+
+	result->u.postgres.pg_result = pg_result;
+	result->u.postgres.row_count = PQntuples(pg_result);
+	result->u.postgres.current_row = 0;
+
+	ret = RT_OK;
+free:
+	return ret;
+
+error:
+	if (pg_result_created)
+		PQclear(pg_result);
+
+	ret = RT_FAILED;
+	goto free;
+}
+
+rt_s da_postgres_statement_free(RT_UNUSED struct da_statement *statement)
+{
 	return RT_OK;
 }
 

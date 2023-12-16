@@ -59,11 +59,10 @@ rt_s da_postgres_connection_create_statement(struct da_connection *connection, s
 	statement->connection = connection;
 
 	statement->execute = &da_postgres_statement_execute;
+	statement->create_result = &da_postgres_statement_create_result;
 	statement->free = &da_postgres_statement_free;
 
 	statement->last_error_message_provider.append = &da_postgres_statement_append_last_error_message;
-
-	statement->u.postgres.pg_result = RT_NULL;
 
 	ret = RT_OK;
 free:

@@ -19,16 +19,60 @@ struct da_last_error_message_provider {
 	da_last_error_message_provider_append_t append;
 };
 
+struct da_result;
 struct da_statement;
 struct da_connection;
 struct da_data_source;
 struct da_driver;
 
+enum da_binding_type {
+	DA_BINDING_TYPE_CHAR8,
+	DA_BINDING_TYPE_N32
+};
+
+struct da_binding {
+	enum da_binding_type type;
+	rt_b is_null;
+	union {
+		struct {
+			rt_char8 *buffer;
+			rt_un buffer_capacity;
+			rt_un buffer_size;
+		} char8;
+		struct {
+			rt_n32 value;
+		} n32;
+	} u;
+};
+
+typedef rt_s (*da_result_bind_t)(struct da_result *result, struct da_binding *bindings, rt_un bindings_size);
+typedef rt_s (*da_result_fetch_t)(struct da_result *result, rt_b *no_more_rows);
+typedef rt_s (*da_result_free_t)(struct da_result *result);
+
+struct da_result {
+	da_result_bind_t bind;
+	da_result_fetch_t fetch;
+	da_result_free_t free;
+	struct da_last_error_message_provider last_error_message_provider;
+	struct da_statement *statement;
+	struct da_binding *bindings;
+	rt_un bindings_size;
+	union {
+		struct {
+			void *pg_result;
+			rt_n32 row_count;
+			rt_n32 current_row;
+		} postgres;
+	} u;
+};
+
 typedef rt_s (*da_statement_execute_t)(struct da_statement *statement, const rt_char8 *sql, rt_un *row_count);
+typedef rt_s (*da_statement_create_result_t)(struct da_statement *statement, struct da_result *result, const rt_char8 *sql);
 typedef rt_s (*da_statement_free_t)(struct da_statement *statement);
 
 struct da_statement {
 	da_statement_execute_t execute;
+	da_statement_create_result_t create_result;
 	da_statement_free_t free;
 	struct da_last_error_message_provider last_error_message_provider;
 	struct da_connection *connection;
@@ -36,9 +80,6 @@ struct da_statement {
 		struct {
 			void *statement_handle;
 		} oracle;
-		struct {
-			void *pg_result;
-		} postgres;
 	} u;
 };
 

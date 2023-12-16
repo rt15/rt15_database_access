@@ -78,12 +78,12 @@ error:
 	goto free;
 }
 
-rt_s da_postgres_data_source_free(struct da_data_source *data_source)
+rt_s da_postgres_data_source_free(RT_UNUSED struct da_data_source *data_source)
 {
 	return RT_OK;
 }
 
-rt_s da_postgres_data_source_append_last_error_message(struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size)
+rt_s da_postgres_data_source_append_last_error_message(RT_UNUSED struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size)
 {
 	return rt_error_message_append_last(buffer, buffer_capacity, buffer_size);
 }

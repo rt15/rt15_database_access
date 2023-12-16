@@ -8,6 +8,9 @@
 #include "layer001/da_oracle_utils.h"
 #include "layer001/da_postgres_utils.h"
 
+#include "layer002/da_oracle_result.h"
+#include "layer002/da_postgres_result.h"
+
 #include "layer003/da_oracle_statement.h"
 #include "layer003/da_postgres_statement.h"
 

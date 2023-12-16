@@ -60,7 +60,7 @@ error:
 #endif
 }
 
-rt_s da_postgres_driver_append_last_error_message(struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size)
+rt_s da_postgres_driver_append_last_error_message(RT_UNUSED struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size)
 {
 	return rt_error_message_append_last(buffer, buffer_capacity, buffer_size);
 }
