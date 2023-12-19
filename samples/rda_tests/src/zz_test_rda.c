@@ -120,6 +120,35 @@ error:
 	goto free;
 }
 
+static rt_s zz_test_auto_commit(struct da_connection *connection)
+{
+	struct da_statement statement;
+	rt_b statement_created;
+	rt_s ret;
+
+	if (RT_UNLIKELY(!connection->open(connection)))
+		goto error;
+
+	if (RT_UNLIKELY(!connection->create_statement(connection, &statement)))
+		goto error;
+
+	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('4', null, 4)", &statement, RT_FALSE, RT_NULL)))
+		goto error;
+
+	ret = RT_OK;
+free:
+	if (statement_created) {
+		statement_created = RT_FALSE;
+		if (RT_UNLIKELY(!statement.free(&statement) && ret))
+			goto error;
+	}
+	return ret;
+
+error:
+	ret = RT_FAILED;
+	goto free;
+}
+
 static rt_s zz_test_query_with_statement(struct da_statement *statement, enum da_database_type database_type)
 {
 	struct da_result result;
@@ -173,9 +202,12 @@ static rt_s zz_test_query_with_statement(struct da_statement *statement, enum da
 		if (line == 1) {
 			val1 = "1";
 			val3 = 1;
-		} else {
+		} else if (line == 2 || line == 3) {
 			val1 = "3";
 			val3 = 2;
+		} else {
+			val1 = "4";
+			val3 = 4;
 		}
 
 		/* Check VAL1. */
@@ -197,7 +229,7 @@ static rt_s zz_test_query_with_statement(struct da_statement *statement, enum da
 		if (RT_UNLIKELY(bindings[2].is_null)) goto error;
 		if (RT_UNLIKELY(bindings[2].u.n32.value != val3)) goto error;
 	}
-	if (RT_UNLIKELY(line != 3))
+	if (RT_UNLIKELY(line != 4))
 		goto error;
 
 	ret = RT_OK;
@@ -253,6 +285,8 @@ static rt_s zz_test_data_source(struct da_data_source *data_source, enum da_data
 {
 	struct da_connection execute_connection;
 	rt_b execute_connection_created = RT_FALSE;
+	struct da_connection auto_commit_connection;
+	rt_b auto_commit_connection_created = RT_FALSE;
 	struct da_connection query_connection;
 	rt_b query_connection_created = RT_FALSE;
 	rt_s ret;
@@ -273,6 +307,13 @@ static rt_s zz_test_data_source(struct da_data_source *data_source, enum da_data
 	if (RT_UNLIKELY(!execute_connection.free(&execute_connection)))
 		goto error;
 
+	if (RT_UNLIKELY(!data_source->create_connection(data_source, &auto_commit_connection, RT_TRUE)))
+		goto error;
+	auto_commit_connection_created = RT_TRUE;
+
+	if (RT_UNLIKELY(!zz_test_auto_commit(&auto_commit_connection)))
+		goto error;
+
 	if (RT_UNLIKELY(!data_source->create_connection(data_source, &query_connection, RT_FALSE)))
 		goto error;
 	query_connection_created = RT_TRUE;
@@ -285,6 +326,12 @@ free:
 	if (query_connection_created) {
 		query_connection_created = RT_FALSE;
 		if (RT_UNLIKELY(!query_connection.free(&query_connection) && ret))
+			goto error;
+	}
+
+	if (auto_commit_connection_created) {
+		auto_commit_connection_created = RT_FALSE;
+		if (RT_UNLIKELY(!auto_commit_connection.free(&auto_commit_connection) && ret))
 			goto error;
 	}
 
