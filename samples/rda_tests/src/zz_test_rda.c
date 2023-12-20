@@ -120,19 +120,114 @@ error:
 	goto free;
 }
 
+static rt_s zz_test_execute_prepared(struct da_connection *connection, enum da_database_type database_type)
+{
+	const rt_char8 *sql;
+	struct da_statement statement;
+	rt_b statement_created = RT_FALSE;
+	enum da_binding_type binding_types[3];
+	void *batch1[3];
+	void *batch2[3];
+	void *batch3[3];
+	void *batch4[3];
+	void *batch5[3];
+	void **batches[4];
+	rt_n32 value1 = 4;
+	rt_n32 value2 = 5;
+	rt_n32 value3 = 6;
+	rt_n32 value4 = 7;
+	rt_n32 value5 = 8;
+	rt_un row_count;
+	rt_s ret;
+
+	switch (database_type) {
+	case DA_DATABASE_TYPE_ORACLE:
+		sql = "insert into RDA_TESTS_TABLE values (:1, :2, :3)";
+		break;
+	case DA_DATABASE_TYPE_POSTGRES:
+		sql = "insert into RDA_TESTS_TABLE values ($1, $2, $3)";
+		break;
+	default:
+		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
+	}
+
+	if (RT_UNLIKELY(!connection->prepare_statement(connection, &statement, sql))) {
+		zz_display_last_error(&connection->last_error_message_provider, _R("Failed to prepare statement"));
+		goto error;
+	}
+	statement_created = RT_TRUE;
+
+	binding_types[0] = DA_BINDING_TYPE_CHAR8;
+	binding_types[1] = DA_BINDING_TYPE_CHAR8;
+	binding_types[2] = DA_BINDING_TYPE_N32;
+
+	batches[0] = batch1;
+	batches[1] = batch2;
+	batches[2] = batch3;
+	batches[3] = batch4;
+
+	batch1[0] = "333";
+	batch1[1] = RT_NULL;
+	batch1[2] = &value1;
+
+	batch2[0] = "4444";
+	batch2[1] = RT_NULL;
+	batch2[2] = &value2;
+
+	batch3[0] = "55555";
+	batch3[1] = RT_NULL;
+	batch3[2] = &value3;
+
+	batch4[0] = RT_NULL;
+	batch4[1] = RT_NULL;
+	batch4[2] = &value4;
+
+	if (RT_UNLIKELY(!statement.execute_prepared(&statement, binding_types, 3, batches, 4, &row_count))) {
+		zz_display_last_error(&statement.last_error_message_provider, _R("Failed to execute prepared statement"));
+		goto error;
+	}
+	
+	if (RT_UNLIKELY(row_count != 4))
+		goto error;
+
+	batches[0] = batch5;
+
+	batch5[0] = "8";
+	batch5[1] = RT_NULL;
+	batch5[2] = &value5;
+
+	if (RT_UNLIKELY(!statement.execute_prepared(&statement, binding_types, 3, batches, 1, &row_count))) {
+		zz_display_last_error(&statement.last_error_message_provider, _R("Failed to execute prepared statement"));
+		goto error;
+	}
+	
+	if (RT_UNLIKELY(row_count != 1))
+		goto error;
+
+	ret = RT_OK;
+free:
+	if (statement_created) {
+		statement_created = RT_FALSE;
+		if (RT_UNLIKELY(!statement.free(&statement) && ret))
+			goto error;
+	}
+	return ret;
+
+error:
+	ret = RT_FAILED;
+	goto free;
+}
+
 static rt_s zz_test_auto_commit(struct da_connection *connection)
 {
 	struct da_statement statement;
 	rt_b statement_created;
 	rt_s ret;
 
-	if (RT_UNLIKELY(!connection->open(connection)))
-		goto error;
-
 	if (RT_UNLIKELY(!connection->create_statement(connection, &statement)))
 		goto error;
 
-	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('4', null, 4)", &statement, RT_FALSE, RT_NULL)))
+	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('9', null, 9)", &statement, RT_FALSE, RT_NULL)))
 		goto error;
 
 	ret = RT_OK;
@@ -162,7 +257,7 @@ static rt_s zz_test_query_with_statement(struct da_statement *statement, enum da
 	rt_n32 val3;
 	rt_s ret;
 
-	if (RT_UNLIKELY(!statement->create_result(statement, &result, "select VAL1, VAL2, VAL3 from RDA_TESTS_TABLE order by VAL1"))) {
+	if (RT_UNLIKELY(!statement->create_result(statement, &result, "select VAL1, VAL2, VAL3 from RDA_TESTS_TABLE order by VAL3"))) {
 		zz_display_last_error(&result.last_error_message_provider, _R("Select failed"));
 		goto error;
 	}
@@ -199,22 +294,53 @@ static rt_s zz_test_query_with_statement(struct da_statement *statement, enum da
 
 		line++;
 
-		if (line == 1) {
+		switch (line) {
+		case 1:
 			val1 = "1";
 			val3 = 1;
-		} else if (line == 2 || line == 3) {
+			break;
+		case 2:
+		case 3:
 			val1 = "3";
 			val3 = 2;
-		} else {
-			val1 = "4";
+			break;
+		case 4:
+			val1 = "333";
 			val3 = 4;
+			break;
+		case 5:
+			val1 = "4444";
+			val3 = 5;
+			break;
+		case 6:
+			val1 = "55555";
+			val3 = 6;
+			break;
+		case 7:
+			val1 = RT_NULL;
+			val3 = 7;
+			break;
+		case 8:
+			val1 = "8";
+			val3 = 8;
+			break;
+		case 9:
+			val1 = "9";
+			val3 = 9;
+			break;
+		default:
+			rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
+			goto error;
 		}
 
 		/* Check VAL1. */
-		if (RT_UNLIKELY(bindings[0].is_null)) goto error;
-		if (RT_UNLIKELY(rt_char8_get_size(buffer1) != 1)) goto error;
-		if (RT_UNLIKELY(bindings[0].u.char8.buffer_size != 1)) goto error;
-		if (RT_UNLIKELY(!rt_char8_equals(buffer1, 1, val1, rt_char8_get_size(val1)))) goto error;
+		if (val1) {
+			if (RT_UNLIKELY(bindings[0].is_null)) goto error;
+			if (RT_UNLIKELY(bindings[0].u.char8.buffer_size != rt_char8_get_size(buffer1))) goto error;
+			if (RT_UNLIKELY(!rt_char8_equals(buffer1, rt_char8_get_size(buffer1), val1, rt_char8_get_size(val1)))) goto error;
+		} else {
+			if (RT_UNLIKELY(!bindings[0].is_null)) goto error;
+		}
 
 		/* Check VAL2. */
 		if (line == 1 && database_type != DA_DATABASE_TYPE_ORACLE) {
@@ -229,7 +355,7 @@ static rt_s zz_test_query_with_statement(struct da_statement *statement, enum da
 		if (RT_UNLIKELY(bindings[2].is_null)) goto error;
 		if (RT_UNLIKELY(bindings[2].u.n32.value != val3)) goto error;
 	}
-	if (RT_UNLIKELY(line != 4))
+	if (RT_UNLIKELY(line != 9))
 		goto error;
 
 	ret = RT_OK;
@@ -310,6 +436,12 @@ static rt_s zz_test_data_source(struct da_data_source *data_source, enum da_data
 	if (RT_UNLIKELY(!data_source->create_connection(data_source, &auto_commit_connection, RT_TRUE)))
 		goto error;
 	auto_commit_connection_created = RT_TRUE;
+
+	if (RT_UNLIKELY(!auto_commit_connection.open(&auto_commit_connection)))
+		goto error;
+
+	if (RT_UNLIKELY(!zz_test_execute_prepared(&auto_commit_connection, database_type)))
+		goto error;
 
 	if (RT_UNLIKELY(!zz_test_auto_commit(&auto_commit_connection)))
 		goto error;

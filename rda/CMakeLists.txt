@@ -42,6 +42,7 @@ link_libraries(rpr${BINARY_SUFFIX})
 link_libraries(oci)
 link_libraries(pq)
 link_libraries(ws2_32)
+link_libraries(rpcrt4)
 
 file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c")
 

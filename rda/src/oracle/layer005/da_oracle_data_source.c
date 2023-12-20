@@ -61,6 +61,7 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 
 	connection->open = &da_oracle_connection_open;
 	connection->create_statement = &da_oracle_connection_create_statement;
+	connection->prepare_statement = &da_oracle_connection_prepare_statement;
 	connection->commit = &da_oracle_connection_commit;
 	connection->rollback = &da_oracle_connection_rollback;
 	connection->free = &da_oracle_connection_free;

@@ -11,7 +11,7 @@ rt_s da_oracle_result_bind(struct da_result *result, struct da_binding *bindings
 	OCIError *error_handle = connection->u.oracle.error_handle;
 	rt_un i;
 	sword status;
-	OCIDefine* define;
+	OCIDefine* define_handle;
 	ub2 *rlenp;
 	sb2 *indp;
 	rt_s ret;
@@ -21,7 +21,7 @@ rt_s da_oracle_result_bind(struct da_result *result, struct da_binding *bindings
 
 	for (i = 0; i < bindings_size; i++) {
 
-		define = RT_NULL;
+		define_handle = RT_NULL;
 		bindings[i].is_null = RT_FALSE;
 
 		switch (bindings[i].type) {
@@ -31,13 +31,13 @@ rt_s da_oracle_result_bind(struct da_result *result, struct da_binding *bindings
 			rlenp = (ub2*)&bindings[i].u.char8.buffer_size;
 			indp = (sb2*)&bindings[i].is_null;
 
-			status = OCIDefineByPos(statement_handle, &define, error_handle, i + 1, bindings[i].u.char8.buffer, bindings[i].u.char8.buffer_capacity, SQLT_STR, indp, rlenp, RT_NULL, OCI_DEFAULT);
+			status = OCIDefineByPos(statement_handle, &define_handle, error_handle, i + 1, bindings[i].u.char8.buffer, bindings[i].u.char8.buffer_capacity, SQLT_STR, indp, rlenp, RT_NULL, OCI_DEFAULT);
 			break;
 		case DA_BINDING_TYPE_N32:
 			rlenp = (ub2*)&bindings[i].u.char8.buffer_size;
 			indp = (sb2*)&bindings[i].is_null;
 
-			status = OCIDefineByPos(statement_handle, &define, error_handle, i + 1, &bindings[i].u.n32.value, sizeof(rt_n32), SQLT_INT, indp, rlenp, RT_NULL, OCI_DEFAULT);
+			status = OCIDefineByPos(statement_handle, &define_handle, error_handle, i + 1, &bindings[i].u.n32.value, sizeof(rt_n32), SQLT_INT, indp, rlenp, RT_NULL, OCI_DEFAULT);
 			break;
 		default:
 			rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);

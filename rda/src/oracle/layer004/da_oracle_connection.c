@@ -66,11 +66,14 @@ rt_s da_oracle_connection_create_statement(struct da_connection *connection, str
 
 	statement->execute = &da_oracle_statement_execute;
 	statement->create_result = &da_oracle_statement_create_result;
+	statement->execute_prepared = &da_oracle_statement_execute_prepared;
 	statement->free = &da_oracle_statement_free;
 
 	statement->last_error_message_provider.append = &da_oracle_statement_append_last_error_message;
 
 	statement->connection = connection;
+
+	statement->prepared_sql = RT_NULL;
 
 	/* Statement handle. */
 	status = OCIHandleAlloc(environment_handle, (void**)&statement_handle, OCI_HTYPE_STMT, 0, NULL);
@@ -97,6 +100,24 @@ error:
 		OCIHandleFree(statement_handle, OCI_HTYPE_STMT);
 	}
 
+	goto free;
+}
+
+rt_s da_oracle_connection_prepare_statement(struct da_connection *connection, struct da_statement *statement, const rt_char8 *sql)
+{
+	rt_s ret;
+
+	if (RT_UNLIKELY(!da_oracle_connection_create_statement(connection, statement)))
+		goto error;
+
+	statement->prepared_sql = sql;
+
+	ret = RT_OK;
+free:
+	return ret;
+
+error:
+	ret = RT_FAILED;
 	goto free;
 }
 

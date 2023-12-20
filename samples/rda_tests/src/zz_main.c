@@ -156,7 +156,7 @@ error:
 	goto free;
 }
 
-static rt_s zz_command_line_args_parse_callback(enum rt_command_line_args_type arg_type, rt_b valid, rt_char short_option, RT_UNUSED const rt_char *long_option,
+static rt_s zz_command_line_args_parse_callback(enum rt_command_line_args_type arg_type, rt_b valid, rt_char short_option, const rt_char *long_option,
 						RT_UNUSED enum rt_command_line_args_value_cardinality value_cardinality, const rt_char *value, void *context)
 {
 	struct zz_settings *settings = (struct zz_settings*)context;

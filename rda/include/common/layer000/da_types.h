@@ -68,23 +68,34 @@ struct da_result {
 
 typedef rt_s (*da_statement_execute_t)(struct da_statement *statement, const rt_char8 *sql, rt_un *row_count);
 typedef rt_s (*da_statement_create_result_t)(struct da_statement *statement, struct da_result *result, const rt_char8 *sql);
+typedef rt_s (*da_statement_execute_prepared_t)(struct da_statement *statement, enum da_binding_type *binding_types, rt_un binding_types_size, void ***batches, rt_un batches_size, rt_un *row_count);
 typedef rt_s (*da_statement_free_t)(struct da_statement *statement);
 
 struct da_statement {
 	da_statement_execute_t execute;
 	da_statement_create_result_t create_result;
+	da_statement_execute_prepared_t execute_prepared;
 	da_statement_free_t free;
 	struct da_last_error_message_provider last_error_message_provider;
 	struct da_connection *connection;
+	const rt_char8 *prepared_sql;
 	union {
 		struct {
 			void *statement_handle;
 		} oracle;
+		struct {
+			rt_char8 statement_name[64];
+			rt_un statement_name_size;
+			rt_b prepared;
+			rt_n32 *param_formats;
+			rt_n32 *param_lengths;
+		} postgres;
 	} u;
 };
 
 typedef rt_s (*da_connection_open_t)(struct da_connection *connection);
 typedef rt_s (*da_connection_create_statement_t)(struct da_connection *connection, struct da_statement *statement);
+typedef rt_s (*da_connection_prepare_statement_t)(struct da_connection *connection, struct da_statement *statement, const rt_char8 *sql);
 typedef rt_s (*da_connection_commit_t)(struct da_connection *connection);
 typedef rt_s (*da_connection_rollback_t)(struct da_connection *connection);
 typedef rt_s (*da_connection_free_t)(struct da_connection *connection);
@@ -92,6 +103,7 @@ typedef rt_s (*da_connection_free_t)(struct da_connection *connection);
 struct da_connection {
 	da_connection_open_t open;
 	da_connection_create_statement_t create_statement;
+	da_connection_prepare_statement_t prepare_statement;
 	da_connection_commit_t commit;
 	da_connection_rollback_t rollback;
 	da_connection_free_t free;

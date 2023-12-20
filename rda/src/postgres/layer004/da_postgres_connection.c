@@ -56,13 +56,19 @@ rt_s da_postgres_connection_create_statement(struct da_connection *connection, s
 		goto error;
 	}
 
-	statement->connection = connection;
-
 	statement->execute = &da_postgres_statement_execute;
 	statement->create_result = &da_postgres_statement_create_result;
+	statement->execute_prepared = &da_postgres_statement_execute_prepared;
 	statement->free = &da_postgres_statement_free;
 
 	statement->last_error_message_provider.append = &da_postgres_statement_append_last_error_message;
+
+	statement->connection = connection;
+
+	statement->prepared_sql = RT_NULL;
+	statement->u.postgres.prepared = RT_FALSE;
+	statement->u.postgres.param_formats = RT_NULL;
+	statement->u.postgres.param_lengths = RT_NULL;
 
 	ret = RT_OK;
 free:
@@ -73,6 +79,34 @@ error:
 	goto free;
 }
 
+rt_s da_postgres_connection_prepare_statement(struct da_connection *connection, struct da_statement *statement, const rt_char8 *sql)
+{
+	struct rt_uuid uuid;
+	rt_un buffer_size;
+	rt_s ret;
+
+	if (RT_UNLIKELY(!da_postgres_connection_create_statement(connection, statement)))
+		goto error;
+
+	statement->prepared_sql = sql;
+
+	if (RT_UNLIKELY(!rt_uuid_create(&uuid)))
+		goto error;
+
+	buffer_size = 0;
+	if (RT_UNLIKELY(!rt_uuid_append8(&uuid, statement->u.postgres.statement_name, 64, &buffer_size)))
+		goto error;
+
+	statement->u.postgres.statement_name_size = buffer_size;
+
+	ret = RT_OK;
+free:
+	return ret;
+
+error:
+	ret = RT_FAILED;
+	goto free;
+}
 
 rt_s da_postgres_connection_commit(struct da_connection *connection)
 {

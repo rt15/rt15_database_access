@@ -57,6 +57,7 @@ rt_s da_postgres_data_source_create_connection(struct da_data_source *data_sourc
 
 	connection->open = &da_postgres_connection_open;
 	connection->create_statement = &da_postgres_connection_create_statement;
+	connection->prepare_statement = &da_postgres_connection_prepare_statement;
 	connection->commit = &da_postgres_connection_commit;
 	connection->rollback = &da_postgres_connection_rollback;
 	connection->free = &da_postgres_connection_free;

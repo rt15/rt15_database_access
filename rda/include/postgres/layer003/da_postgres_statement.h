@@ -7,6 +7,8 @@ RT_EXPORT rt_s da_postgres_statement_execute(struct da_statement *statement, con
 
 RT_EXPORT rt_s da_postgres_statement_create_result(struct da_statement *statement, struct da_result *result, const rt_char8 *sql);
 
+RT_EXPORT rt_s da_postgres_statement_execute_prepared(struct da_statement *statement, enum da_binding_type *binding_types, rt_un binding_types_size, void ***batches, rt_un batches_size, rt_un *row_count);
+
 RT_EXPORT rt_s da_postgres_statement_free(struct da_statement *statement);
 
 RT_EXPORT rt_s da_postgres_statement_append_last_error_message(struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size);
