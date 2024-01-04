@@ -244,7 +244,7 @@ error:
 	goto free;
 }
 
-static rt_s zz_test_query_with_statement(struct da_statement *statement, enum da_database_type database_type)
+static rt_s zz_test_select_with_statement(struct da_statement *statement, enum da_database_type database_type)
 {
 	struct da_result result;
 	rt_b result_created = RT_FALSE;
@@ -372,11 +372,109 @@ error:
 	goto free;
 }
 
-static rt_s zz_test_query_with_connection(struct da_connection *connection, enum da_database_type database_type)
+static rt_s zz_test_select_with_prepared_statement(struct da_statement *statement)
 {
+	enum da_binding_type binding_types[2] = { DA_BINDING_TYPE_CHAR8, DA_BINDING_TYPE_N32 };
+	rt_n32 val3 = 4;
+	void *select_bindings[2];
+	struct da_result result;
+	rt_b result_created = RT_FALSE;
+	struct da_binding bindings[3];
+	rt_char8 buffer1[256];
+	rt_char8 buffer2[256];
+	rt_un lines_count = 0;
+	rt_b no_more_rows;
+	rt_s ret;
+
+	select_bindings[0] = "333";
+	select_bindings[1] = &val3;
+
+	if (RT_UNLIKELY(!statement->select_prepared(statement, &result, binding_types, 2, select_bindings))) {
+		zz_display_last_error(&statement->last_error_message_provider, _R("Prepared statement execution failed"));
+		goto error;
+	}
+	result_created = RT_TRUE;
+
+	/* VAL1. */
+	bindings[0].type = DA_BINDING_TYPE_CHAR8;
+	bindings[0].u.char8.buffer = buffer1;
+	bindings[0].u.char8.buffer_capacity = 256;
+	RT_MEMORY_SET(buffer1, 'x', sizeof(buffer1));
+
+	/* VAL2. */
+	bindings[1].type = DA_BINDING_TYPE_CHAR8;
+	bindings[1].u.char8.buffer = buffer2;
+	bindings[1].u.char8.buffer_capacity = 256;
+	RT_MEMORY_SET(buffer2, 'x', sizeof(buffer2));
+
+	/* VAL3. */
+	bindings[2].type = DA_BINDING_TYPE_N32;
+
+	if (RT_UNLIKELY(!result.bind(&result, bindings, 3))) {
+		zz_display_last_error(&result.last_error_message_provider, _R("Binding failed"));
+		goto error;
+	}
+
+	while (RT_TRUE) {
+		if (RT_UNLIKELY(!result.fetch(&result, &no_more_rows))) {
+			zz_display_last_error(&result.last_error_message_provider, _R("Fetch failed"));
+			goto error;
+		}
+
+		if (no_more_rows)
+			break;
+
+		lines_count++;
+
+		/* VAL1. */
+		if (RT_UNLIKELY(bindings[0].is_null)) goto error;
+		if (RT_UNLIKELY(bindings[0].u.char8.buffer_size != rt_char8_get_size(buffer1))) goto error;
+		if (RT_UNLIKELY(!rt_char8_equals(buffer1, rt_char8_get_size(buffer1), "333", 3))) goto error;
+
+		/* VAL2. */
+		if (RT_UNLIKELY(!bindings[1].is_null)) goto error;
+
+		/* VAL3. */
+		if (RT_UNLIKELY(bindings[2].is_null)) goto error;
+		if (RT_UNLIKELY(bindings[2].u.n32.value != 4)) goto error;
+	}
+
+	if (RT_UNLIKELY(lines_count != 1))
+		goto error;
+
+	ret = RT_OK;
+free:
+	if (result_created) {
+		result_created = RT_FALSE;
+		if (RT_UNLIKELY(!result.free(&result) && ret))
+			goto error;
+	}
+	return ret;
+
+error:
+	ret = RT_FAILED;
+	goto free;
+}
+
+static rt_s zz_test_select_with_connection(struct da_connection *connection, enum da_database_type database_type)
+{
+	rt_char8 *sql;
 	struct da_statement statement;
 	rt_b statement_created = RT_FALSE;
+	struct da_statement prepared_statement;
+	rt_b prepared_statement_created = RT_FALSE;
 	rt_s ret;
+
+	switch (database_type) {
+	case DA_DATABASE_TYPE_ORACLE:
+		sql = "select VAL1, VAL2, VAL3 from RDA_TESTS_TABLE where VAL1 = :1 and VAL3 = :2";
+		break;
+	case DA_DATABASE_TYPE_POSTGRES:
+		sql = "select VAL1, VAL2, VAL3 from RDA_TESTS_TABLE where VAL1 = $1 and VAL3 = $2";
+		break;
+	default:
+		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
+	}
 
 	if (RT_UNLIKELY(!connection->open(connection))) {
 		zz_display_last_error(&connection->last_error_message_provider, _R("Failed to open the connection"));
@@ -390,11 +488,23 @@ static rt_s zz_test_query_with_connection(struct da_connection *connection, enum
 		goto error;
 	statement_created = RT_TRUE;
 
-	if (RT_UNLIKELY(!zz_test_query_with_statement(&statement, database_type)))
+	if (RT_UNLIKELY(!zz_test_select_with_statement(&statement, database_type)))
+		goto error;
+
+	if (RT_UNLIKELY(!connection->prepare_statement(connection, &prepared_statement, sql)))
+		goto error;
+	prepared_statement_created = RT_TRUE;
+
+	if (RT_UNLIKELY(!zz_test_select_with_prepared_statement(&prepared_statement)))
 		goto error;
 
 	ret = RT_OK;
 free:
+	if (prepared_statement_created) {
+		prepared_statement_created = RT_FALSE;
+		if (RT_UNLIKELY(!prepared_statement.free(&prepared_statement) && ret))
+			goto error;
+	}
 	if (statement_created) {
 		statement_created = RT_FALSE;
 		if (RT_UNLIKELY(!statement.free(&statement) && ret))
@@ -413,8 +523,8 @@ static rt_s zz_test_data_source(struct da_data_source *data_source, enum da_data
 	rt_b execute_connection_created = RT_FALSE;
 	struct da_connection auto_commit_connection;
 	rt_b auto_commit_connection_created = RT_FALSE;
-	struct da_connection query_connection;
-	rt_b query_connection_created = RT_FALSE;
+	struct da_connection select_connection;
+	rt_b select_connection_created = RT_FALSE;
 	rt_s ret;
 
 	if (RT_UNLIKELY(!data_source->open(data_source))) {
@@ -446,18 +556,18 @@ static rt_s zz_test_data_source(struct da_data_source *data_source, enum da_data
 	if (RT_UNLIKELY(!zz_test_auto_commit(&auto_commit_connection)))
 		goto error;
 
-	if (RT_UNLIKELY(!data_source->create_connection(data_source, &query_connection, RT_FALSE)))
+	if (RT_UNLIKELY(!data_source->create_connection(data_source, &select_connection, RT_FALSE)))
 		goto error;
-	query_connection_created = RT_TRUE;
+	select_connection_created = RT_TRUE;
 
-	if (RT_UNLIKELY(!zz_test_query_with_connection(&query_connection, database_type)))
+	if (RT_UNLIKELY(!zz_test_select_with_connection(&select_connection, database_type)))
 		goto error;
 
 	ret = RT_OK;
 free:
-	if (query_connection_created) {
-		query_connection_created = RT_FALSE;
-		if (RT_UNLIKELY(!query_connection.free(&query_connection) && ret))
+	if (select_connection_created) {
+		select_connection_created = RT_FALSE;
+		if (RT_UNLIKELY(!select_connection.free(&select_connection) && ret))
 			goto error;
 	}
 

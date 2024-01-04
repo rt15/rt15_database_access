@@ -130,7 +130,7 @@ error:
 	goto free;
 }
 
-rt_s da_oracle_statement_execute_prepared(struct da_statement *statement, enum da_binding_type *binding_types, rt_un binding_types_size, void ***batches, rt_un batches_size, rt_un *row_count)
+static rt_s da_oracle_statement_execute_prepared_internal(struct da_statement *statement, enum da_binding_type *binding_types, rt_un binding_types_size, void ***batches, rt_un batches_size, ub4 iters)
 {
 	OCIStmt *statement_handle = statement->u.oracle.statement_handle;
 	struct da_connection *connection = statement->connection;
@@ -277,7 +277,7 @@ rt_s da_oracle_statement_execute_prepared(struct da_statement *statement, enum d
 	else
 		mode = OCI_DEFAULT;
 
-	status = OCIStmtExecute(service_context_handle, statement_handle, error_handle, batches_size, 0, RT_NULL, RT_NULL, mode);
+	status = OCIStmtExecute(service_context_handle, statement_handle, error_handle, iters, 0, RT_NULL, RT_NULL, mode);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		connection->u.oracle.last_error_is_oracle = RT_TRUE;
@@ -286,9 +286,6 @@ rt_s da_oracle_statement_execute_prepared(struct da_statement *statement, enum d
 		connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
 		goto error;
 	}
-
-	if (RT_UNLIKELY(!da_oracle_statement_get_row_count(statement_handle, error_handle, connection, row_count)))
-		goto error;
 
 	ret = RT_OK;
 free:
@@ -312,6 +309,54 @@ free:
 			goto error;
 		}
 	}
+	return ret;
+
+error:
+	ret = RT_FAILED;
+	goto free;
+}
+
+rt_s da_oracle_statement_execute_prepared(struct da_statement *statement, enum da_binding_type *binding_types, rt_un binding_types_size, void ***batches, rt_un batches_size, rt_un *row_count)
+{
+	OCIStmt *statement_handle = statement->u.oracle.statement_handle;
+	struct da_connection *connection = statement->connection;
+	OCIError *error_handle = connection->u.oracle.error_handle;
+	rt_s ret;
+
+	if (RT_UNLIKELY(!da_oracle_statement_execute_prepared_internal(statement, binding_types, binding_types_size, batches, batches_size, batches_size)))
+		goto error;
+
+	if (row_count) {
+		if (RT_UNLIKELY(!da_oracle_statement_get_row_count(statement_handle, error_handle, connection, row_count)))
+			goto error;
+	}
+
+	ret = RT_OK;
+free:
+	return ret;
+
+error:
+	ret = RT_FAILED;
+	goto free;
+}
+
+rt_s da_oracle_statement_select_prepared(struct da_statement *statement, struct da_result *result, enum da_binding_type *binding_types, rt_un binding_types_size, void **bindings)
+{
+	rt_s ret;
+
+	result->bind = &da_oracle_result_bind;
+	result->fetch = &da_oracle_result_fetch;
+	result->free = &da_oracle_result_free;
+
+	result->last_error_message_provider.append = &da_oracle_result_append_last_error_message;
+
+	result->statement = statement;
+
+	if (RT_UNLIKELY(!da_oracle_statement_execute_prepared_internal(statement, binding_types, binding_types_size, &bindings, 1, 0)))
+		goto error;
+
+	ret = RT_OK;
+free:
 	return ret;
 
 error:
