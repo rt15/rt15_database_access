@@ -275,7 +275,9 @@ static rt_s zz_parse_args(rt_un argc, const rt_char *argv[])
 	}
 
 	database_type_size = rt_char_get_size(settings.database_type);
-	if (rt_char_equals(settings.database_type, database_type_size, _R("ORACLE"), 6)) {
+	if (rt_char_equals(settings.database_type, database_type_size, _R("MSSQL"), 5)) {
+		database_type = DA_DATABASE_TYPE_MSSQL;
+	} else if (rt_char_equals(settings.database_type, database_type_size, _R("ORACLE"), 6)) {
 		database_type = DA_DATABASE_TYPE_ORACLE;
 	} else if (rt_char_equals(settings.database_type, database_type_size, _R("POSTGRES"), 8)) {
 		database_type = DA_DATABASE_TYPE_POSTGRES;

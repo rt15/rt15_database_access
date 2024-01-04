@@ -8,19 +8,19 @@ rt_s da_oracle_data_source_open(struct da_data_source *data_source)
 {
 	OCIServer *server_handle = data_source->u.oracle.server_handle;
 	OCIError *error_handle = data_source->u.oracle.error_handle;
-	rt_char8 *db_link = data_source->u.oracle.db_link;
-	rt_un db_link_size = data_source->u.oracle.db_link_size;
+	rt_char8 *connection_string = data_source->u.oracle.connection_string;
+	rt_un connection_string_size = data_source->u.oracle.connection_string_size;
 	sword status;
 	rt_s ret;
 
 	if (RT_UNLIKELY(data_source->opened)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		data_source->u.oracle.last_error_is_oracle = RT_FALSE;
 		goto error;
 	}
 
 	/* Attach server handle to host/port/database. */
-	status = OCIServerAttach(server_handle, error_handle, (OraText*)db_link, db_link_size, OCI_DEFAULT);
+	status = OCIServerAttach(server_handle, error_handle, (OraText*)connection_string, connection_string_size, OCI_DEFAULT);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		data_source->u.oracle.last_error_is_oracle = RT_TRUE;
@@ -54,7 +54,7 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	rt_s ret;
 
 	if (RT_UNLIKELY(!data_source->opened)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		data_source->u.oracle.last_error_is_oracle = RT_FALSE;
 		goto error;
 	}
@@ -122,7 +122,7 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	session_handle_created = RT_TRUE;
 
 	/* Set user_name in session */
-	status = OCIAttrSet(session_handle, OCI_HTYPE_SESSION, data_source->user_name, data_source->user_name_size, OCI_ATTR_USERNAME, data_source->u.oracle.error_handle);
+	status = OCIAttrSet(session_handle, OCI_HTYPE_SESSION, data_source->u.oracle.user_name, data_source->u.oracle.user_name_size, OCI_ATTR_USERNAME, data_source->u.oracle.error_handle);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		data_source->u.oracle.last_error_is_oracle = RT_TRUE;
@@ -133,7 +133,7 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	}
 
 	/* Set password in session */
-	status = OCIAttrSet(session_handle, OCI_HTYPE_SESSION, data_source->password, data_source->password_size, OCI_ATTR_PASSWORD, data_source->u.oracle.error_handle);
+	status = OCIAttrSet(session_handle, OCI_HTYPE_SESSION, data_source->u.oracle.password, data_source->u.oracle.password_size, OCI_ATTR_PASSWORD, data_source->u.oracle.error_handle);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		data_source->u.oracle.last_error_is_oracle = RT_TRUE;

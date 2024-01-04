@@ -49,15 +49,18 @@ static rt_s zz_test_execute_with_statement(struct da_statement *statement, struc
 	rt_s ret;
 
 	switch (database_type) {
-	case DA_DATABASE_TYPE_ORACLE:
-		if (RT_UNLIKELY(!zz_execute_statement("drop table RDA_TESTS_TABLE", statement, RT_TRUE, RT_NULL))) goto error;
-		if (RT_UNLIKELY(!zz_execute_statement("create table RDA_TESTS_TABLE (VAL1 varchar2(200), VAL2 varchar2(200), VAL3 number(15))", statement, RT_FALSE, RT_NULL))) goto error;
-		break;
+	case DA_DATABASE_TYPE_MSSQL:
 	case DA_DATABASE_TYPE_POSTGRES:
 		if (RT_UNLIKELY(!zz_execute_statement("drop table if exists RDA_TESTS_TABLE", statement, RT_FALSE, RT_NULL))) goto error;
 		if (RT_UNLIKELY(!zz_execute_statement("create table RDA_TESTS_TABLE (VAL1 varchar(200), VAL2 varchar(200), VAL3 numeric(15))", statement, RT_FALSE, RT_NULL))) goto error;
 		break;
+	case DA_DATABASE_TYPE_ORACLE:
+		if (RT_UNLIKELY(!zz_execute_statement("drop table RDA_TESTS_TABLE", statement, RT_TRUE, RT_NULL))) goto error;
+		if (RT_UNLIKELY(!zz_execute_statement("create table RDA_TESTS_TABLE (VAL1 varchar2(200), VAL2 varchar2(200), VAL3 number(15))", statement, RT_FALSE, RT_NULL))) goto error;
+		break;
 	}
+
+	if (RT_UNLIKELY(!connection->commit(connection))) goto error;
 
 	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('1', '', 1)", statement, RT_FALSE, RT_NULL))) goto error;
 	if (RT_UNLIKELY(!zz_execute_statement("insert into RDA_TESTS_TABLE values ('2', null, 2)", statement, RT_FALSE, RT_NULL))) goto error;
@@ -141,6 +144,9 @@ static rt_s zz_test_execute_prepared(struct da_connection *connection, enum da_d
 	rt_s ret;
 
 	switch (database_type) {
+	case DA_DATABASE_TYPE_MSSQL:
+		sql = "insert into RDA_TESTS_TABLE values (?, ?, ?)";
+		break;
 	case DA_DATABASE_TYPE_ORACLE:
 		sql = "insert into RDA_TESTS_TABLE values (:1, :2, :3)";
 		break;
@@ -186,7 +192,7 @@ static rt_s zz_test_execute_prepared(struct da_connection *connection, enum da_d
 		zz_display_last_error(&statement.last_error_message_provider, _R("Failed to execute prepared statement"));
 		goto error;
 	}
-	
+
 	if (RT_UNLIKELY(row_count != 4))
 		goto error;
 
@@ -200,7 +206,7 @@ static rt_s zz_test_execute_prepared(struct da_connection *connection, enum da_d
 		zz_display_last_error(&statement.last_error_message_provider, _R("Failed to execute prepared statement"));
 		goto error;
 	}
-	
+
 	if (RT_UNLIKELY(row_count != 1))
 		goto error;
 
@@ -251,7 +257,7 @@ static rt_s zz_test_select_with_statement(struct da_statement *statement, enum d
 	struct da_binding bindings[3];
 	rt_char8 buffer1[256];
 	rt_char8 buffer2[256];
-	rt_b no_more_rows;
+	rt_b end_of_rows;
 	rt_un line = 0;
 	const rt_char8 *val1;
 	rt_n32 val3;
@@ -284,12 +290,12 @@ static rt_s zz_test_select_with_statement(struct da_statement *statement, enum d
 	}
 
 	while (RT_TRUE) {
-		if (RT_UNLIKELY(!result.fetch(&result, &no_more_rows))) {
+		if (RT_UNLIKELY(!result.fetch(&result, &end_of_rows))) {
 			zz_display_last_error(&result.last_error_message_provider, _R("Fetch failed"));
 			goto error;
 		}
 
-		if (no_more_rows)
+		if (end_of_rows)
 			break;
 
 		line++;
@@ -383,7 +389,7 @@ static rt_s zz_test_select_with_prepared_statement(struct da_statement *statemen
 	rt_char8 buffer1[256];
 	rt_char8 buffer2[256];
 	rt_un lines_count = 0;
-	rt_b no_more_rows;
+	rt_b end_of_rows;
 	rt_s ret;
 
 	select_bindings[0] = "333";
@@ -416,12 +422,12 @@ static rt_s zz_test_select_with_prepared_statement(struct da_statement *statemen
 	}
 
 	while (RT_TRUE) {
-		if (RT_UNLIKELY(!result.fetch(&result, &no_more_rows))) {
+		if (RT_UNLIKELY(!result.fetch(&result, &end_of_rows))) {
 			zz_display_last_error(&result.last_error_message_provider, _R("Fetch failed"));
 			goto error;
 		}
 
-		if (no_more_rows)
+		if (end_of_rows)
 			break;
 
 		lines_count++;
@@ -466,6 +472,9 @@ static rt_s zz_test_select_with_connection(struct da_connection *connection, enu
 	rt_s ret;
 
 	switch (database_type) {
+	case DA_DATABASE_TYPE_MSSQL:
+		sql = "select VAL1, VAL2, VAL3 from RDA_TESTS_TABLE where VAL1 = ? and VAL3 = ?";
+		break;
 	case DA_DATABASE_TYPE_ORACLE:
 		sql = "select VAL1, VAL2, VAL3 from RDA_TESTS_TABLE where VAL1 = :1 and VAL3 = :2";
 		break;

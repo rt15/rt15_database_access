@@ -9,7 +9,7 @@ rt_s da_oracle_result_bind(struct da_result *result, struct da_binding *bindings
 	OCIStmt *statement_handle = statement->u.oracle.statement_handle;
 	struct da_connection *connection = statement->connection;
 	OCIError *error_handle = connection->u.oracle.error_handle;
-	rt_un i;
+	rt_un column_index;
 	sword status;
 	OCIDefine* define_handle;
 	ub2 *rlenp;
@@ -19,25 +19,25 @@ rt_s da_oracle_result_bind(struct da_result *result, struct da_binding *bindings
 	result->bindings = bindings;
 	result->bindings_size = bindings_size;
 
-	for (i = 0; i < bindings_size; i++) {
+	for (column_index = 0; column_index < bindings_size; column_index++) {
 
 		define_handle = RT_NULL;
-		bindings[i].is_null = RT_FALSE;
+		bindings[column_index].is_null = RT_FALSE;
 
-		switch (bindings[i].type) {
+		switch (bindings[column_index].type) {
 		case DA_BINDING_TYPE_CHAR8:
 
-			bindings[i].u.char8.buffer_size = 0;
-			rlenp = (ub2*)&bindings[i].u.char8.buffer_size;
-			indp = (sb2*)&bindings[i].is_null;
+			bindings[column_index].u.char8.buffer_size = 0;
+			rlenp = (ub2*)&bindings[column_index].u.char8.buffer_size;
+			indp = (sb2*)&bindings[column_index].is_null;
 
-			status = OCIDefineByPos(statement_handle, &define_handle, error_handle, i + 1, bindings[i].u.char8.buffer, bindings[i].u.char8.buffer_capacity, SQLT_STR, indp, rlenp, RT_NULL, OCI_DEFAULT);
+			status = OCIDefineByPos(statement_handle, &define_handle, error_handle, column_index + 1, bindings[column_index].u.char8.buffer, bindings[column_index].u.char8.buffer_capacity, SQLT_STR, indp, rlenp, RT_NULL, OCI_DEFAULT);
 			break;
 		case DA_BINDING_TYPE_N32:
-			rlenp = (ub2*)&bindings[i].u.char8.buffer_size;
-			indp = (sb2*)&bindings[i].is_null;
+			rlenp = (ub2*)&bindings[column_index].u.char8.buffer_size;
+			indp = (sb2*)&bindings[column_index].is_null;
 
-			status = OCIDefineByPos(statement_handle, &define_handle, error_handle, i + 1, &bindings[i].u.n32.value, sizeof(rt_n32), SQLT_INT, indp, rlenp, RT_NULL, OCI_DEFAULT);
+			status = OCIDefineByPos(statement_handle, &define_handle, error_handle, column_index + 1, &bindings[column_index].u.n32.value, sizeof(rt_n32), SQLT_INT, indp, rlenp, RT_NULL, OCI_DEFAULT);
 			break;
 		default:
 			rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
@@ -64,22 +64,22 @@ error:
 	goto free;
 }
 
-rt_s da_oracle_result_fetch(struct da_result *result, rt_b *no_more_rows)
+rt_s da_oracle_result_fetch(struct da_result *result, rt_b *end_of_rows)
 {
 	struct da_statement *statement = result->statement;
 	OCIStmt *statement_handle = statement->u.oracle.statement_handle;
 	struct da_connection *connection = statement->connection;
 	OCIError *error_handle = connection->u.oracle.error_handle;
 	sword status;
+	rt_un column_index;
 	sb2 indicator;
-	rt_un i;
 	rt_s ret;
 
 	status = OCIStmtFetch(statement_handle, error_handle, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
 	if (status == OCI_NO_DATA) {
-		*no_more_rows = RT_TRUE;
+		*end_of_rows = RT_TRUE;
 	} else {
-		*no_more_rows = RT_FALSE;
+		*end_of_rows = RT_FALSE;
 		if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 			connection->u.oracle.last_error_is_oracle = RT_TRUE;
@@ -91,16 +91,16 @@ rt_s da_oracle_result_fetch(struct da_result *result, rt_b *no_more_rows)
 
 		/* We stored the indicator value in the is_null field. */
 		/* So now we exploit the indicator and set is_null accordingly. */
-		for (i = 0; i < result->bindings_size; i++) {
-			indicator = (sb2)result->bindings[i].is_null;
+		for (column_index = 0; column_index < result->bindings_size; column_index++) {
+			indicator = (sb2)result->bindings[column_index].is_null;
 			switch (indicator) {
 			case 0:
 				/* All good. */
-				result->bindings[i].is_null = RT_FALSE;
+				result->bindings[column_index].is_null = RT_FALSE;
 				break;
 			case -1:
 				/* Null value. */
-				result->bindings[i].is_null = RT_TRUE;
+				result->bindings[column_index].is_null = RT_TRUE;
 				break;
 			default:
 				/* Provided buffer was too small. */

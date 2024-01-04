@@ -18,17 +18,15 @@ rt_s da_postgres_driver_create_data_source(struct da_driver *driver, struct da_d
 
 	data_source->opened = RT_FALSE;
 
-	data_source->user_name_size = rt_char8_get_size(user_name);
-	if (RT_UNLIKELY(!rt_char8_copy(user_name, data_source->user_name_size, data_source->user_name, DA_IDENTIFIER_SIZE))) goto error;
-	data_source->password_size = rt_char8_get_size(password);
-	if (RT_UNLIKELY(!rt_char8_copy(password, data_source->password_size, data_source->password, DA_IDENTIFIER_SIZE))) goto error;
+	if (RT_UNLIKELY(!rt_char8_copy(user_name, rt_char8_get_size(user_name), data_source->u.postgres.user_name, DA_IDENTIFIER_SIZE))) goto error;
+	if (RT_UNLIKELY(!rt_char8_copy(password, rt_char8_get_size(password), data_source->u.postgres.password, DA_IDENTIFIER_SIZE))) goto error;
 
 	if (RT_UNLIKELY(!rt_char8_copy(host_name, rt_char8_get_size(host_name), data_source->u.postgres.host_name, DA_IDENTIFIER_SIZE))) goto error;
 
 	buffer_size = 0;
 	if (RT_UNLIKELY(!rt_char8_append_un(port, 10, data_source->u.postgres.port, DA_IDENTIFIER_SIZE, &buffer_size))) goto error;
 
-	if (RT_UNLIKELY(!rt_char8_copy(database, rt_char8_get_size(database), data_source->u.postgres.dbname, DA_DB_SIZE))) goto error;
+	if (RT_UNLIKELY(!rt_char8_copy(database, rt_char8_get_size(database), data_source->u.postgres.dbname, DA_CONNECTION_STRING_SIZE))) goto error;
 
 	ret = RT_OK;
 free:

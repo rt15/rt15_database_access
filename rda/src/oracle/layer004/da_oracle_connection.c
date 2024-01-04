@@ -13,7 +13,7 @@ rt_s da_oracle_connection_open(struct da_connection *connection)
 	rt_s ret;
 
 	if (RT_UNLIKELY(connection->opened)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		connection->u.oracle.last_error_is_oracle = RT_FALSE;
 		goto error;
 	}
@@ -59,7 +59,7 @@ rt_s da_oracle_connection_create_statement(struct da_connection *connection, str
 	rt_s ret;
 
 	if (RT_UNLIKELY(!connection->opened)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		connection->u.oracle.last_error_is_oracle = RT_FALSE;
 		goto error;
 	}
@@ -75,6 +75,7 @@ rt_s da_oracle_connection_create_statement(struct da_connection *connection, str
 	statement->connection = connection;
 
 	statement->prepared_sql = RT_NULL;
+	statement->prepared = RT_FALSE;
 
 	/* Statement handle. */
 	status = OCIHandleAlloc(environment_handle, (void**)&statement_handle, OCI_HTYPE_STMT, 0, NULL);

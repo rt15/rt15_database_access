@@ -4,7 +4,6 @@
 #include "oracle/layer001/da_oracle_utils.h"
 #include "oracle/layer002/da_oracle_result.h"
 
-
 struct da_oracle_statement_binding {
 	rt_n16 *indicators;
 	rt_un16 *lengths;
@@ -152,14 +151,17 @@ static rt_s da_oracle_statement_execute_prepared_internal(struct da_statement *s
 	ub4 mode;
 	rt_s ret;
 
-	status = OCIStmtPrepare(statement_handle, error_handle, (OraText*)sql, rt_char8_get_size(sql), OCI_NTV_SYNTAX, OCI_DEFAULT);
-	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.oracle.last_error_is_oracle = RT_TRUE;
-		connection->u.oracle.last_error_status = status;
-		connection->u.oracle.last_error_handle = error_handle;
-		connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
-		goto error;
+	if (!statement->prepared) {
+		status = OCIStmtPrepare(statement_handle, error_handle, (OraText*)sql, rt_char8_get_size(sql), OCI_NTV_SYNTAX, OCI_DEFAULT);
+		if (RT_UNLIKELY(status != OCI_SUCCESS)) {
+			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+			connection->u.oracle.last_error_is_oracle = RT_TRUE;
+			connection->u.oracle.last_error_status = status;
+			connection->u.oracle.last_error_handle = error_handle;
+			connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
+			goto error;
+		}
+		statement->prepared = RT_TRUE;
 	}
 
 	if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&bindings, binding_types_size * sizeof(struct da_oracle_statement_binding)))) {
@@ -209,54 +211,54 @@ static rt_s da_oracle_statement_execute_prepared_internal(struct da_statement *s
 			}
 
 			switch (binding_types[column_index]) {
-				case DA_BINDING_TYPE_CHAR8:
-					/* Compute lengths and max_length. */
-					max_length = 0;
-					for (row_index = 0; row_index < batches_size; row_index++) {
-						if (batches[row_index][column_index]) {
-							length = rt_char8_get_size(batches[row_index][column_index]);
-							length++;
-							bindings[column_index].lengths[row_index] = length;
-							if (length > max_length)
-								max_length = length;
-						}
+			case DA_BINDING_TYPE_CHAR8:
+				/* Compute lengths and max_length. */
+				max_length = 0;
+				for (row_index = 0; row_index < batches_size; row_index++) {
+					if (batches[row_index][column_index]) {
+						length = rt_char8_get_size(batches[row_index][column_index]);
+						length++;
+						bindings[column_index].lengths[row_index] = length;
+						if (length > max_length)
+							max_length = length;
 					}
+				}
 
-					if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&bindings[column_index].values, batches_size * max_length))) {
-						connection->u.oracle.last_error_is_oracle = RT_FALSE;
-						goto error;
-					}
-
-					/* Prepare values array. */
-					for (row_index = 0; row_index < batches_size; row_index++) {
-						if (batches[row_index][column_index]) {
-							if (RT_UNLIKELY(!rt_char8_copy(batches[row_index][column_index], bindings[column_index].lengths[row_index] - 1, &bindings[column_index].values[row_index * max_length], max_length))) {
-								connection->u.oracle.last_error_is_oracle = RT_FALSE;
-								goto error;
-							}
-						}
-					}
-
-					data_type = SQLT_STR;
-					break;
-				case DA_BINDING_TYPE_N32:
-					if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&bindings[column_index].values, batches_size * sizeof(rt_n32)))) {
-						connection->u.oracle.last_error_is_oracle = RT_FALSE;
-						goto error;
-					}
-					n32_values = (rt_n32*)bindings[column_index].values;
-					for (row_index = 0; row_index < batches_size; row_index++) {
-						if (batches[row_index][column_index])
-							n32_values[row_index] = *(rt_n32*)batches[row_index][column_index];
-						bindings[column_index].lengths[row_index] = sizeof(int);
-					}
-					max_length = sizeof(int);
-					data_type = SQLT_INT;
-					break;
-				default:
-					rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
+				if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&bindings[column_index].values, batches_size * max_length))) {
 					connection->u.oracle.last_error_is_oracle = RT_FALSE;
 					goto error;
+				}
+
+				/* Prepare values array. */
+				for (row_index = 0; row_index < batches_size; row_index++) {
+					if (batches[row_index][column_index]) {
+						if (RT_UNLIKELY(!rt_char8_copy(batches[row_index][column_index], bindings[column_index].lengths[row_index] - 1, &bindings[column_index].values[row_index * max_length], max_length))) {
+							connection->u.oracle.last_error_is_oracle = RT_FALSE;
+							goto error;
+						}
+					}
+				}
+
+				data_type = SQLT_STR;
+				break;
+			case DA_BINDING_TYPE_N32:
+				if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&bindings[column_index].values, batches_size * sizeof(rt_n32)))) {
+					connection->u.oracle.last_error_is_oracle = RT_FALSE;
+					goto error;
+				}
+				n32_values = (rt_n32*)bindings[column_index].values;
+				for (row_index = 0; row_index < batches_size; row_index++) {
+					if (batches[row_index][column_index])
+						n32_values[row_index] = *(rt_n32*)batches[row_index][column_index];
+					bindings[column_index].lengths[row_index] = sizeof(int);
+				}
+				max_length = sizeof(int);
+				data_type = SQLT_INT;
+				break;
+			default:
+				rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
+				connection->u.oracle.last_error_is_oracle = RT_FALSE;
+				goto error;
 			}
 		}
 

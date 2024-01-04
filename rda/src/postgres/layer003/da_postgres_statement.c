@@ -1,4 +1,4 @@
-#include "oracle/layer003/da_oracle_statement.h"
+#include "postgres/layer003/da_postgres_statement.h"
 
 #include "postgres/layer000/da_postgres_headers.h"
 #include "postgres/layer001/da_postgres_utils.h"
@@ -200,15 +200,13 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 	}
 
 	/* We prepare it if it has not been prepared already. */
-	if (!statement->u.postgres.prepared) {
+	if (!statement->prepared) {
 
 		if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&statement->u.postgres.param_formats, binding_types_size * sizeof(rt_n32)))) {
-			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 			connection->u.postgres.last_error_is_postgres = RT_FALSE;
 			goto error;
 		}
 		if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&statement->u.postgres.param_lengths, binding_types_size * sizeof(rt_n32)))) {
-			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 			connection->u.postgres.last_error_is_postgres = RT_FALSE;
 			goto error;
 		}
@@ -245,7 +243,7 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 			connection->u.postgres.last_error_is_postgres = RT_TRUE;
 			goto error;
 		}
-		statement->u.postgres.prepared = RT_TRUE;
+		statement->prepared = RT_TRUE;
 
 		/* Prepare param_formats and param_length. */
 		for (column_index = 0; column_index < binding_types_size; column_index++) {
@@ -388,7 +386,7 @@ rt_s da_postgres_statement_free(struct da_statement *statement)
 	rt_un buffer_size;
 	rt_s ret = RT_OK;
 
-	if (statement->u.postgres.prepared) {
+	if (statement->prepared) {
 		buffer_size = 12;
 		if (RT_UNLIKELY(!rt_char8_copy("deallocate \"", buffer_size, buffer, 256))) {
 			/* Last error has been set by rt_char8_copy. */
@@ -437,5 +435,5 @@ rt_s da_postgres_statement_append_last_error_message(struct da_last_error_messag
 	struct da_statement *statement = RT_MEMORY_CONTAINER_OF(last_error_message_provider, struct da_statement, last_error_message_provider);
 	struct da_connection *connection = statement->connection;
 
-	return da_postres_utils_append_error_message(connection->u.postgres.last_error_is_postgres, connection, buffer, buffer_capacity, buffer_size);
+	return da_postgres_utils_append_error_message(connection, buffer, buffer_capacity, buffer_size);
 }

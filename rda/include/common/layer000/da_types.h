@@ -4,9 +4,10 @@
 #include <rpr.h>
 
 #define DA_IDENTIFIER_SIZE 64
-#define DA_DB_SIZE 256
+#define DA_CONNECTION_STRING_SIZE 1024
 
 enum da_database_type {
+	DA_DATABASE_TYPE_MSSQL,
 	DA_DATABASE_TYPE_ORACLE,
 	DA_DATABASE_TYPE_POSTGRES
 };
@@ -33,6 +34,7 @@ enum da_binding_type {
 struct da_binding {
 	enum da_binding_type type;
 	rt_b is_null;
+	rt_un64 reserved;
 	union {
 		struct {
 			rt_char8 *buffer;
@@ -46,7 +48,7 @@ struct da_binding {
 };
 
 typedef rt_s (*da_result_bind_t)(struct da_result *result, struct da_binding *bindings, rt_un bindings_size);
-typedef rt_s (*da_result_fetch_t)(struct da_result *result, rt_b *no_more_rows);
+typedef rt_s (*da_result_fetch_t)(struct da_result *result, rt_b *end_of_rows);
 typedef rt_s (*da_result_free_t)(struct da_result *result);
 
 struct da_result {
@@ -81,14 +83,18 @@ struct da_statement {
 	struct da_last_error_message_provider last_error_message_provider;
 	struct da_connection *connection;
 	const rt_char8 *prepared_sql;
+	rt_b prepared;
 	union {
+		struct {
+			void *statement_handle;
+			rt_un cumulative_row_count;
+		} mssql;
 		struct {
 			void *statement_handle;
 		} oracle;
 		struct {
 			rt_char8 statement_name[64];
 			rt_un statement_name_size;
-			rt_b prepared;
 			rt_n32 *param_formats;
 			rt_n32 *param_lengths;
 		} postgres;
@@ -114,6 +120,12 @@ struct da_connection {
 	rt_b auto_commit;
 	rt_b opened;
 	union {
+		struct {
+			void *connection_handle;
+			rt_b last_error_is_mssql;
+			rt_n16 last_error_handle_type;
+			void *last_error_handle;
+		} mssql;
 		struct {
 			void *error_handle;
 			void *service_context_handle;
@@ -141,25 +153,30 @@ struct da_data_source {
 	struct da_last_error_message_provider last_error_message_provider;
 	struct da_driver *driver;
 	rt_b opened;
-	rt_char8 user_name[DA_IDENTIFIER_SIZE];
-	rt_un user_name_size;
-	rt_char8 password[DA_IDENTIFIER_SIZE];
-	rt_un password_size;
 	union {
 		struct {
+			rt_char8 connection_string[DA_CONNECTION_STRING_SIZE];
+		} mssql;
+		struct {
+			rt_char8 user_name[DA_IDENTIFIER_SIZE];
+			rt_un user_name_size;
+			rt_char8 password[DA_IDENTIFIER_SIZE];
+			rt_un password_size;
 			void *error_handle;
 			void *server_handle;
-			rt_char8 db_link[DA_DB_SIZE];
-			rt_un db_link_size;
+			rt_char8 connection_string[DA_CONNECTION_STRING_SIZE];
+			rt_un connection_string_size;
 			rt_b last_error_is_oracle;
 			rt_n32 last_error_status;
 			void *last_error_handle;
 			rt_un32 last_error_handle_type;
 		} oracle;
 		struct {
+			rt_char8 user_name[DA_IDENTIFIER_SIZE];
+			rt_char8 password[DA_IDENTIFIER_SIZE];
 			rt_char8 host_name[DA_IDENTIFIER_SIZE];
 			rt_char8 port[DA_IDENTIFIER_SIZE];
-			rt_char8 dbname[DA_DB_SIZE];
+			rt_char8 dbname[DA_CONNECTION_STRING_SIZE];
 			const rt_char8 *keywords[6];
 			const rt_char8 *values[6];
 		} postgres;
@@ -174,6 +191,9 @@ struct da_driver {
 	da_driver_free_t free;
 	struct da_last_error_message_provider last_error_message_provider;
 	union {
+		struct {
+			void *environment_handle;
+		} mssql;
 		struct {
 			void *environment_handle;
 			rt_b last_error_is_oracle;

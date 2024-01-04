@@ -11,7 +11,7 @@ rt_s da_oracle_driver_create_data_source(struct da_driver *driver, struct da_dat
 	rt_b error_handle_created = RT_FALSE;
 	OCIServer *server_handle;
 	rt_b server_handle_created = RT_FALSE;
-	rt_un db_link_size;
+	rt_un connection_string_size;
 	sword status;
 	rt_s ret;
 
@@ -28,18 +28,18 @@ rt_s da_oracle_driver_create_data_source(struct da_driver *driver, struct da_dat
 	/* Make sure last error is ready in case an rt_char8 function fails. */
 	data_source->u.oracle.last_error_is_oracle = RT_FALSE;
 
-	data_source->user_name_size = rt_char8_get_size(user_name);
-	if (RT_UNLIKELY(!rt_char8_copy(user_name, data_source->user_name_size, data_source->user_name, DA_IDENTIFIER_SIZE))) goto error;
-	data_source->password_size = rt_char8_get_size(password);
-	if (RT_UNLIKELY(!rt_char8_copy(password, data_source->password_size, data_source->password, DA_IDENTIFIER_SIZE))) goto error;
+	data_source->u.oracle.user_name_size = rt_char8_get_size(user_name);
+	if (RT_UNLIKELY(!rt_char8_copy(user_name, data_source->u.oracle.user_name_size, data_source->u.oracle.user_name, DA_IDENTIFIER_SIZE))) goto error;
+	data_source->u.oracle.password_size = rt_char8_get_size(password);
+	if (RT_UNLIKELY(!rt_char8_copy(password, data_source->u.oracle.password_size, data_source->u.oracle.password, DA_IDENTIFIER_SIZE))) goto error;
 
 	/* Build the connection string. */
-	db_link_size = rt_char8_get_size(host_name);
-	if (RT_UNLIKELY(!rt_char8_copy(host_name, db_link_size, data_source->u.oracle.db_link, DA_DB_SIZE))) goto error;
-	if (RT_UNLIKELY(!rt_char8_append_char(':', data_source->u.oracle.db_link, DA_DB_SIZE, &db_link_size))) goto error;
-	if (RT_UNLIKELY(!rt_char8_append_un(port, 10, data_source->u.oracle.db_link, DA_DB_SIZE, &db_link_size))) goto error;
-	if (RT_UNLIKELY(!rt_char8_append(database, rt_char8_get_size(database), data_source->u.oracle.db_link, DA_DB_SIZE, &db_link_size))) goto error;
-	data_source->u.oracle.db_link_size = db_link_size;
+	connection_string_size = rt_char8_get_size(host_name);
+	if (RT_UNLIKELY(!rt_char8_copy(host_name, connection_string_size, data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE))) goto error;
+	if (RT_UNLIKELY(!rt_char8_append_char(':', data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE, &connection_string_size))) goto error;
+	if (RT_UNLIKELY(!rt_char8_append_un(port, 10, data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE, &connection_string_size))) goto error;
+	if (RT_UNLIKELY(!rt_char8_append(database, rt_char8_get_size(database), data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE, &connection_string_size))) goto error;
+	data_source->u.oracle.connection_string_size = connection_string_size;
 
 	/* Error handle. */
 	status = OCIHandleAlloc(environment_handle, (void**)&error_handle, OCI_HTYPE_ERROR, 0, NULL);

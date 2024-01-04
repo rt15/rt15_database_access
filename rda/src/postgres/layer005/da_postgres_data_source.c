@@ -10,7 +10,7 @@ rt_s da_postgres_data_source_open(struct da_data_source *data_source)
 	rt_s ret;
 
 	if (RT_UNLIKELY(data_source->opened)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		goto error;
 	}
 
@@ -27,10 +27,10 @@ rt_s da_postgres_data_source_open(struct da_data_source *data_source)
 	values[2] = data_source->u.postgres.dbname;
 
 	keywords[3] = "user";
-	values[3] = data_source->user_name;
+	values[3] = data_source->u.postgres.user_name;
 
 	keywords[4] = "password";
-	values[4] = data_source->password;
+	values[4] = data_source->u.postgres.password;
 
 	keywords[5] = RT_NULL;
 	values[5] = RT_NULL;
@@ -51,7 +51,7 @@ rt_s da_postgres_data_source_create_connection(struct da_data_source *data_sourc
 	rt_s ret;
 
 	if (RT_UNLIKELY(!data_source->opened)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		goto error;
 	}
 

@@ -4,6 +4,37 @@
 #include "postgres/layer001/da_postgres_utils.h"
 #include "postgres/layer003/da_postgres_statement.h"
 
+static rt_s da_postgres_connection_execute(struct da_connection *connection, const rt_char8 *sql)
+{
+	PGconn *pg_conn = connection->u.postgres.pg_conn;
+	PGresult *pg_result = RT_NULL;
+	rt_s ret;
+
+	pg_result = PQexec(pg_conn, sql);
+	if (RT_UNLIKELY(!pg_result)) {
+		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		connection->u.postgres.last_error_is_postgres = RT_TRUE;
+		goto error;
+	}
+	if (RT_UNLIKELY(PQresultStatus(pg_result) != PGRES_COMMAND_OK)) {
+		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		connection->u.postgres.last_error_is_postgres = RT_TRUE;
+		goto error;
+	}
+
+	ret = RT_OK;
+free:
+	if (pg_result) {
+		/* PQClear returns void. */
+		PQclear(pg_result);
+	}
+	return ret;
+
+error:
+	ret = RT_FAILED;
+	goto free;
+}
+
 rt_s da_postgres_connection_open(struct da_connection *connection)
 {
 	struct da_data_source *data_source = connection->data_source;
@@ -11,7 +42,7 @@ rt_s da_postgres_connection_open(struct da_connection *connection)
 	rt_s ret;
 
 	if (RT_UNLIKELY(connection->opened)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		connection->u.postgres.last_error_is_postgres = RT_FALSE;
 		goto error;
 	}
@@ -33,7 +64,7 @@ rt_s da_postgres_connection_open(struct da_connection *connection)
 	}
 
 	if (!connection->auto_commit) {
-		if (RT_UNLIKELY(!da_postgres_utils_execute(connection, "begin")))
+		if (RT_UNLIKELY(!da_postgres_connection_execute(connection, "begin")))
 			goto error;
 	}
 
@@ -51,7 +82,7 @@ rt_s da_postgres_connection_create_statement(struct da_connection *connection, s
 	rt_s ret;
 
 	if (RT_UNLIKELY(!connection->opened)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
+		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		connection->u.postgres.last_error_is_postgres = RT_FALSE;
 		goto error;
 	}
@@ -67,7 +98,8 @@ rt_s da_postgres_connection_create_statement(struct da_connection *connection, s
 	statement->connection = connection;
 
 	statement->prepared_sql = RT_NULL;
-	statement->u.postgres.prepared = RT_FALSE;
+	statement->prepared = RT_FALSE;
+
 	statement->u.postgres.param_formats = RT_NULL;
 	statement->u.postgres.param_lengths = RT_NULL;
 
@@ -113,11 +145,11 @@ rt_s da_postgres_connection_commit(struct da_connection *connection)
 {
 	rt_s ret;
 	
-	if (RT_UNLIKELY(!da_postgres_utils_execute(connection, "commit")))
+	if (RT_UNLIKELY(!da_postgres_connection_execute(connection, "commit")))
 		goto error;
 
 	if (!connection->auto_commit) {
-		if (RT_UNLIKELY(!da_postgres_utils_execute(connection, "begin")))
+		if (RT_UNLIKELY(!da_postgres_connection_execute(connection, "begin")))
 			goto error;
 	}
 
@@ -134,11 +166,11 @@ rt_s da_postgres_connection_rollback(struct da_connection *connection)
 {
 	rt_s ret;
 	
-	if (RT_UNLIKELY(!da_postgres_utils_execute(connection, "rollback")))
+	if (RT_UNLIKELY(!da_postgres_connection_execute(connection, "rollback")))
 		goto error;
 
 	if (!connection->auto_commit) {
-		if (RT_UNLIKELY(!da_postgres_utils_execute(connection, "begin")))
+		if (RT_UNLIKELY(!da_postgres_connection_execute(connection, "begin")))
 			goto error;
 	}
 
@@ -167,5 +199,5 @@ rt_s da_postgres_connection_append_last_error_message(struct da_last_error_messa
 {
 	struct da_connection *connection = RT_MEMORY_CONTAINER_OF(last_error_message_provider, struct da_connection, last_error_message_provider);
 
-	return da_postres_utils_append_error_message(connection->u.postgres.last_error_is_postgres, connection, buffer, buffer_capacity, buffer_size);
+	return da_postgres_utils_append_error_message(connection, buffer, buffer_capacity, buffer_size);
 }
