@@ -57,7 +57,7 @@ rt_s da_postgres_connection_create_statement(struct da_connection *connection, s
 	}
 
 	statement->execute = &da_postgres_statement_execute;
-	statement->create_result = &da_postgres_statement_create_result;
+	statement->select = &da_postgres_statement_select;
 	statement->execute_prepared = &da_postgres_statement_execute_prepared;
 	statement->free = &da_postgres_statement_free;
 

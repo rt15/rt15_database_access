@@ -67,13 +67,13 @@ struct da_result {
 };
 
 typedef rt_s (*da_statement_execute_t)(struct da_statement *statement, const rt_char8 *sql, rt_un *row_count);
-typedef rt_s (*da_statement_create_result_t)(struct da_statement *statement, struct da_result *result, const rt_char8 *sql);
+typedef rt_s (*da_statement_select_t)(struct da_statement *statement, struct da_result *result, const rt_char8 *sql);
 typedef rt_s (*da_statement_execute_prepared_t)(struct da_statement *statement, enum da_binding_type *binding_types, rt_un binding_types_size, void ***batches, rt_un batches_size, rt_un *row_count);
 typedef rt_s (*da_statement_free_t)(struct da_statement *statement);
 
 struct da_statement {
 	da_statement_execute_t execute;
-	da_statement_create_result_t create_result;
+	da_statement_select_t select;
 	da_statement_execute_prepared_t execute_prepared;
 	da_statement_free_t free;
 	struct da_last_error_message_provider last_error_message_provider;

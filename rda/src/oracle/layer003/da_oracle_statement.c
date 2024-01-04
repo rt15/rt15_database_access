@@ -103,7 +103,7 @@ error:
 	goto free;
 }
 
-RT_EXPORT rt_s da_oracle_statement_create_result(struct da_statement *statement, struct da_result *result, const rt_char8 *sql)
+RT_EXPORT rt_s da_oracle_statement_select(struct da_statement *statement, struct da_result *result, const rt_char8 *sql)
 {
 	OCIStmt *statement_handle = statement->u.oracle.statement_handle;
 	struct da_connection *connection = statement->connection;

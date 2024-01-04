@@ -102,7 +102,7 @@ error:
 	goto free;
 }
 
-rt_s da_postgres_statement_create_result(struct da_statement *statement, struct da_result *result, const rt_char8 *sql)
+rt_s da_postgres_statement_select(struct da_statement *statement, struct da_result *result, const rt_char8 *sql)
 {
 	struct da_connection *connection = statement->connection;
 	PGresult *pg_result;

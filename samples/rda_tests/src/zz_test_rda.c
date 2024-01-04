@@ -257,7 +257,7 @@ static rt_s zz_test_query_with_statement(struct da_statement *statement, enum da
 	rt_n32 val3;
 	rt_s ret;
 
-	if (RT_UNLIKELY(!statement->create_result(statement, &result, "select VAL1, VAL2, VAL3 from RDA_TESTS_TABLE order by VAL3"))) {
+	if (RT_UNLIKELY(!statement->select(statement, &result, "select VAL1, VAL2, VAL3 from RDA_TESTS_TABLE order by VAL3"))) {
 		zz_display_last_error(&result.last_error_message_provider, _R("Select failed"));
 		goto error;
 	}

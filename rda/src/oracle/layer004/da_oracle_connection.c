@@ -65,7 +65,7 @@ rt_s da_oracle_connection_create_statement(struct da_connection *connection, str
 	}
 
 	statement->execute = &da_oracle_statement_execute;
-	statement->create_result = &da_oracle_statement_create_result;
+	statement->select = &da_oracle_statement_select;
 	statement->execute_prepared = &da_oracle_statement_execute_prepared;
 	statement->free = &da_oracle_statement_free;
 
