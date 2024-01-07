@@ -48,6 +48,7 @@ rt_s da_mssql_data_source_create_connection(struct da_data_source *data_source, 
 	connection->opened = RT_FALSE;
 
 	connection->u.mssql.connection_handle = RT_NULL;
+	connection->u.mssql.connection_handle_created = RT_FALSE;
 
 	ret = RT_OK;
 free:

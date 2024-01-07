@@ -10,7 +10,6 @@ rt_s da_mssql_connection_open(struct da_connection *connection)
 	struct da_driver *driver = data_source->driver;
 	SQLHENV environment_handle = driver->u.mssql.environment_handle;
 	SQLHDBC connection_handle;
-	rt_b connection_handle_created = RT_FALSE;
 	rt_char8 *connection_string = data_source->u.mssql.connection_string;
 	SQLRETURN status;
 	rt_b connected = RT_FALSE;
@@ -28,7 +27,8 @@ rt_s da_mssql_connection_open(struct da_connection *connection)
 		connection->u.mssql.last_error_is_mssql = RT_FALSE;
 		goto error;
 	}
-	connection_handle_created = RT_TRUE;
+	connection->u.mssql.connection_handle = connection_handle;
+	connection->u.mssql.connection_handle_created = RT_TRUE;
 
 	if (connection->auto_commit) {
 		status = SQLSetConnectAttr(connection_handle, SQL_ATTR_AUTOCOMMIT, (SQLPOINTER)SQL_AUTOCOMMIT_ON, SQL_IS_UINTEGER);
@@ -53,7 +53,6 @@ rt_s da_mssql_connection_open(struct da_connection *connection)
 	}
 	connected = RT_TRUE;
 
-	connection->u.mssql.connection_handle = connection_handle;
 
 	connection->opened = RT_TRUE;
 
@@ -65,9 +64,6 @@ error:
 	if (connected) {
 		SQLDisconnect(connection_handle);
 	}
-
-	if (connection_handle_created)
-		SQLFreeHandle(SQL_HANDLE_DBC, connection_handle);
 
 	ret = RT_FAILED;
 	goto free;
@@ -204,7 +200,9 @@ rt_s da_mssql_connection_free(struct da_connection *connection)
 			connection->u.mssql.last_error_is_mssql = RT_FALSE;
 			ret = RT_FAILED;
 		}
+	}
 
+	if (connection->u.mssql.connection_handle_created) {
 		status = SQLFreeHandle(SQL_HANDLE_DBC, connection_handle);
 		if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);

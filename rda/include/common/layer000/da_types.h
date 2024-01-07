@@ -122,6 +122,7 @@ struct da_connection {
 	union {
 		struct {
 			void *connection_handle;
+			rt_b connection_handle_created;
 			rt_b last_error_is_mssql;
 			rt_n16 last_error_handle_type;
 			void *last_error_handle;
