@@ -1,6 +1,37 @@
 #include <rpr.h>
 #include <rda.h>
 
+static rt_s zz_create_driver(struct da_driver *driver, enum da_database_type database_type)
+{
+	rt_s ret;
+
+	switch (database_type) {
+	case DA_DATABASE_TYPE_MSSQL:
+		if (RT_UNLIKELY(!da_mssql_driver_create(driver)))
+			goto error;
+		break;
+	case DA_DATABASE_TYPE_ORACLE:
+		if (RT_UNLIKELY(!da_oracle_driver_create(driver)))
+			goto error;
+		break;
+	case DA_DATABASE_TYPE_POSTGRES:
+		if (RT_UNLIKELY(!da_postgres_driver_create(driver)))
+			goto error;
+		break;
+	default:
+		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
+		goto error;
+	}
+
+	ret = RT_OK;
+free:
+	return ret;
+
+error:
+	ret = RT_FAILED;
+	goto free;
+}
+
 static void zz_display_last_error(struct da_last_error_message_provider *last_error_message_provider, rt_char *prefix)
 {
 	rt_char buffer[RT_CHAR_BIG_STRING_SIZE];
@@ -635,7 +666,7 @@ rt_s zz_test_rda(const rt_char8 *host_name, rt_un port, const rt_char8 *database
 	if (RT_UNLIKELY(!rt_console_write_string(_R("Connecting...\n"))))
 		goto error;
 
-	if (RT_UNLIKELY(!da_driver_manager_create_driver(&driver, database_type)))
+	if (RT_UNLIKELY(!zz_create_driver(&driver, database_type)))
 		goto error;
 	driver_created = RT_TRUE;
 

@@ -26,6 +26,4 @@
 #include "postgres/layer005/da_postgres_data_source.h"
 #include "postgres/layer006/da_postgres_driver.h"
 
-#include "common/layer007/da_driver_manager.h"
-
 #endif /* RDA_H */
