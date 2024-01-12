@@ -9,6 +9,4 @@ RT_EXPORT rt_s da_postgres_data_source_create_connection(struct da_data_source *
 
 RT_EXPORT rt_s da_postgres_data_source_free(struct da_data_source *data_source);
 
-RT_EXPORT rt_s da_postgres_data_source_append_last_error_message(struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size);
-
 #endif /* DA_POSTGRES_DATA_SOURCE_H */

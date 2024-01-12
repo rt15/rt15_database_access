@@ -12,13 +12,11 @@ static rt_s da_postgres_connection_execute(struct da_connection *connection, con
 
 	pg_result = PQexec(pg_conn, sql);
 	if (RT_UNLIKELY(!pg_result)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.postgres.last_error_is_postgres = RT_TRUE;
+		da_postgres_utils_set_with_last_error(connection);
 		goto error;
 	}
 	if (RT_UNLIKELY(PQresultStatus(pg_result) != PGRES_COMMAND_OK)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.postgres.last_error_is_postgres = RT_TRUE;
+		da_postgres_utils_set_with_last_error(connection);
 		goto error;
 	}
 
@@ -43,14 +41,14 @@ rt_s da_postgres_connection_open(struct da_connection *connection)
 
 	if (RT_UNLIKELY(connection->opened)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
-		connection->u.postgres.last_error_is_postgres = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		goto error;
 	}
 
 	pg_conn = PQconnectdbParams(data_source->u.postgres.keywords, data_source->u.postgres.values, 1);
 	if (RT_UNLIKELY(!pg_conn)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.postgres.last_error_is_postgres = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		goto error;
 	}
 	/* The connection will be closed in da_postgres_connection_free. */
@@ -58,8 +56,7 @@ rt_s da_postgres_connection_open(struct da_connection *connection)
 	connection->opened = RT_TRUE;
 
 	if (RT_UNLIKELY(PQstatus(pg_conn) != CONNECTION_OK)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.postgres.last_error_is_postgres = RT_TRUE;
+		da_postgres_utils_set_with_last_error(connection);
 		goto error;
 	}
 
@@ -83,7 +80,7 @@ rt_s da_postgres_connection_create_statement(struct da_connection *connection, s
 
 	if (RT_UNLIKELY(!connection->opened)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
-		connection->u.postgres.last_error_is_postgres = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		goto error;
 	}
 
@@ -92,8 +89,6 @@ rt_s da_postgres_connection_create_statement(struct da_connection *connection, s
 	statement->execute_prepared = &da_postgres_statement_execute_prepared;
 	statement->select_prepared = &da_postgres_statement_select_prepared;
 	statement->free = &da_postgres_statement_free;
-
-	statement->last_error_message_provider.append = &da_postgres_statement_append_last_error_message;
 
 	statement->connection = connection;
 
@@ -123,12 +118,16 @@ rt_s da_postgres_connection_prepare_statement(struct da_connection *connection, 
 
 	statement->prepared_sql = sql;
 
-	if (RT_UNLIKELY(!rt_uuid_create(&uuid)))
+	if (RT_UNLIKELY(!rt_uuid_create(&uuid))) {
+		rt_last_error_message_set_with_last_error();
 		goto error;
+	}
 
 	buffer_size = 0;
-	if (RT_UNLIKELY(!rt_uuid_append8(&uuid, statement->u.postgres.statement_name, 64, &buffer_size)))
+	if (RT_UNLIKELY(!rt_uuid_append8(&uuid, statement->u.postgres.statement_name, 64, &buffer_size))) {
+		rt_last_error_message_set_with_last_error();
 		goto error;
+	}
 
 	statement->u.postgres.statement_name_size = buffer_size;
 
@@ -193,11 +192,4 @@ rt_s da_postgres_connection_free(struct da_connection *connection)
 	}
 
 	return RT_OK;
-}
-
-rt_s da_postgres_connection_append_last_error_message(struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size)
-{
-	struct da_connection *connection = RT_MEMORY_CONTAINER_OF(last_error_message_provider, struct da_connection, last_error_message_provider);
-
-	return da_postgres_utils_append_error_message(connection, buffer, buffer_capacity, buffer_size);
 }

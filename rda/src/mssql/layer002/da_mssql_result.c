@@ -6,7 +6,6 @@
 rt_s da_mssql_result_bind(struct da_result *result, struct da_binding *bindings, rt_un bindings_size)
 {
 	struct da_statement *statement = result->statement;
-	struct da_connection *connection = statement->connection;
 	SQLHSTMT statement_handle = statement->u.mssql.statement_handle;
 	rt_un column_index;
 	SQLSMALLINT c_type;
@@ -33,15 +32,12 @@ rt_s da_mssql_result_bind(struct da_result *result, struct da_binding *bindings,
 			break;
 		default:
 			rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
-			connection->u.mssql.last_error_is_mssql = RT_FALSE;
+			rt_last_error_message_set_with_last_error();
 			goto error;
 		}
 		status = SQLBindCol(statement_handle, column_index + 1, c_type, buffer, buffer_capacity, (rt_n64*)&bindings[column_index].reserved);
 		if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
-			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-			connection->u.mssql.last_error_is_mssql = RT_TRUE;
-			connection->u.mssql.last_error_handle_type = SQL_HANDLE_STMT;
-			connection->u.mssql.last_error_handle = statement_handle;
+			da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
 			goto error;
 		}
 	}
@@ -58,7 +54,6 @@ error:
 rt_s da_mssql_result_fetch(struct da_result *result, rt_b *end_of_rows)
 {
 	struct da_statement *statement = result->statement;
-	struct da_connection *connection = statement->connection;
 	SQLHSTMT statement_handle = statement->u.mssql.statement_handle;
 	SQLRETURN status;
 	rt_un column_index;
@@ -70,10 +65,7 @@ rt_s da_mssql_result_fetch(struct da_result *result, rt_b *end_of_rows)
 		*end_of_rows = RT_TRUE;
 	} else {
 		if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
-			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-			connection->u.mssql.last_error_is_mssql = RT_TRUE;
-			connection->u.mssql.last_error_handle_type = SQL_HANDLE_STMT;
-			connection->u.mssql.last_error_handle = statement_handle;
+			da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
 			goto error;
 		}
 
@@ -92,7 +84,7 @@ rt_s da_mssql_result_fetch(struct da_result *result, rt_b *end_of_rows)
 					break;
 				default:
 					rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
-					connection->u.mssql.last_error_is_mssql = RT_FALSE;
+					rt_last_error_message_set_with_last_error();
 					goto error;
 				}
 			}
@@ -111,13 +103,4 @@ error:
 rt_s da_mssql_result_free(RT_UNUSED struct da_result *result)
 {
 	return RT_OK;
-}
-
-rt_s da_mssql_result_append_last_error_message(struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size)
-{
-	struct da_result *result = RT_MEMORY_CONTAINER_OF(last_error_message_provider, struct da_result, last_error_message_provider);
-	struct da_statement *statement = result->statement;
-	struct da_connection *connection = statement->connection;
-
-	return da_mssql_utils_append_error_message(connection, buffer, buffer_capacity, buffer_size);
 }

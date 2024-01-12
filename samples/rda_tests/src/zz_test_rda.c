@@ -32,22 +32,6 @@ error:
 	goto free;
 }
 
-static void zz_display_last_error(struct da_last_error_message_provider *last_error_message_provider, rt_char *prefix)
-{
-	rt_char buffer[RT_CHAR_BIG_STRING_SIZE];
-	rt_un buffer_size;
-
-	buffer_size = rt_char_get_size(prefix);
-	if (RT_UNLIKELY(!rt_char_copy(prefix, buffer_size, buffer, RT_CHAR_BIG_STRING_SIZE))) goto the_end;
-	if (RT_UNLIKELY(!rt_char_append(_R(" - "), 3, buffer, RT_CHAR_BIG_STRING_SIZE, &buffer_size))) goto the_end;
-	if (RT_UNLIKELY(!last_error_message_provider->append(last_error_message_provider, buffer, RT_CHAR_BIG_STRING_SIZE, &buffer_size))) goto the_end;
-
-	rt_console_write_error_with_size(buffer, buffer_size);
-
-the_end:
-	return;
-}
-
 static rt_s zz_execute_statement(rt_char8 *sql, struct da_statement *statement, rt_b ignore_errors, rt_un *row_count)
 {
 	rt_char buffer[RT_CHAR_HALF_BIG_STRING_SIZE];
@@ -61,7 +45,7 @@ static rt_s zz_execute_statement(rt_char8 *sql, struct da_statement *statement, 
 	if (RT_UNLIKELY(!rt_console_write_string_with_size(buffer, buffer_size))) goto error;
 
 	if (RT_UNLIKELY(!statement->execute(statement, sql, row_count) && !ignore_errors)) {
-		zz_display_last_error(&statement->last_error_message_provider, _R("Statement execution failed"));
+		rt_last_error_message_write(_R("Statement execution failed"));
 		goto error;
 	}
 
@@ -126,7 +110,7 @@ static rt_s zz_test_execute_with_connection(struct da_connection *connection, en
 	rt_s ret;
 
 	if (RT_UNLIKELY(!connection->open(connection))) {
-		zz_display_last_error(&connection->last_error_message_provider, _R("Failed to open the connection"));
+		rt_last_error_message_write(_R("Failed to open the connection"));
 		goto error;
 	}
 
@@ -189,7 +173,7 @@ static rt_s zz_test_execute_prepared(struct da_connection *connection, enum da_d
 	}
 
 	if (RT_UNLIKELY(!connection->prepare_statement(connection, &statement, sql))) {
-		zz_display_last_error(&connection->last_error_message_provider, _R("Failed to prepare statement"));
+		rt_last_error_message_write(_R("Failed to prepare statement"));
 		goto error;
 	}
 	statement_created = RT_TRUE;
@@ -220,7 +204,7 @@ static rt_s zz_test_execute_prepared(struct da_connection *connection, enum da_d
 	batch4[2] = &value4;
 
 	if (RT_UNLIKELY(!statement.execute_prepared(&statement, binding_types, 3, batches, 4, &row_count))) {
-		zz_display_last_error(&statement.last_error_message_provider, _R("Failed to execute prepared statement"));
+		rt_last_error_message_write(_R("Failed to execute prepared statement"));
 		goto error;
 	}
 
@@ -234,7 +218,7 @@ static rt_s zz_test_execute_prepared(struct da_connection *connection, enum da_d
 	batch5[2] = &value5;
 
 	if (RT_UNLIKELY(!statement.execute_prepared(&statement, binding_types, 3, batches, 1, &row_count))) {
-		zz_display_last_error(&statement.last_error_message_provider, _R("Failed to execute prepared statement"));
+		rt_last_error_message_write(_R("Failed to execute prepared statement"));
 		goto error;
 	}
 
@@ -295,7 +279,7 @@ static rt_s zz_test_select_with_statement(struct da_statement *statement, enum d
 	rt_s ret;
 
 	if (RT_UNLIKELY(!statement->select(statement, &result, "select VAL1, VAL2, VAL3 from RDA_TESTS_TABLE order by VAL3"))) {
-		zz_display_last_error(&result.last_error_message_provider, _R("Select failed"));
+		rt_last_error_message_write(_R("Select failed"));
 		goto error;
 	}
 	result_created = RT_TRUE;
@@ -316,13 +300,13 @@ static rt_s zz_test_select_with_statement(struct da_statement *statement, enum d
 	bindings[2].type = DA_BINDING_TYPE_N32;
 
 	if (RT_UNLIKELY(!result.bind(&result, bindings, sizeof(bindings) / sizeof(bindings[0])))) {
-		zz_display_last_error(&result.last_error_message_provider, _R("Binding failed"));
+		rt_last_error_message_write(_R("Binding failed"));
 		goto error;
 	}
 
 	while (RT_TRUE) {
 		if (RT_UNLIKELY(!result.fetch(&result, &end_of_rows))) {
-			zz_display_last_error(&result.last_error_message_provider, _R("Fetch failed"));
+			rt_last_error_message_write(_R("Fetch failed"));
 			goto error;
 		}
 
@@ -427,7 +411,7 @@ static rt_s zz_test_select_with_prepared_statement(struct da_statement *statemen
 	select_bindings[1] = &val3;
 
 	if (RT_UNLIKELY(!statement->select_prepared(statement, &result, binding_types, 2, select_bindings))) {
-		zz_display_last_error(&statement->last_error_message_provider, _R("Prepared statement execution failed"));
+		rt_last_error_message_write(_R("Prepared statement execution failed"));
 		goto error;
 	}
 	result_created = RT_TRUE;
@@ -448,13 +432,13 @@ static rt_s zz_test_select_with_prepared_statement(struct da_statement *statemen
 	bindings[2].type = DA_BINDING_TYPE_N32;
 
 	if (RT_UNLIKELY(!result.bind(&result, bindings, 3))) {
-		zz_display_last_error(&result.last_error_message_provider, _R("Binding failed"));
+		rt_last_error_message_write(_R("Binding failed"));
 		goto error;
 	}
 
 	while (RT_TRUE) {
 		if (RT_UNLIKELY(!result.fetch(&result, &end_of_rows))) {
-			zz_display_last_error(&result.last_error_message_provider, _R("Fetch failed"));
+			rt_last_error_message_write(_R("Fetch failed"));
 			goto error;
 		}
 
@@ -517,7 +501,7 @@ static rt_s zz_test_select_with_connection(struct da_connection *connection, enu
 	}
 
 	if (RT_UNLIKELY(!connection->open(connection))) {
-		zz_display_last_error(&connection->last_error_message_provider, _R("Failed to open the connection"));
+		rt_last_error_message_write(_R("Failed to open the connection"));
 		goto error;
 	}
 
@@ -568,7 +552,7 @@ static rt_s zz_test_data_source(struct da_data_source *data_source, enum da_data
 	rt_s ret;
 
 	if (RT_UNLIKELY(!data_source->open(data_source))) {
-		zz_display_last_error(&data_source->last_error_message_provider, _R("Failed to connect to the database"));
+		rt_last_error_message_write(_R("Failed to connect to the database"));
 		goto error;
 	}
 

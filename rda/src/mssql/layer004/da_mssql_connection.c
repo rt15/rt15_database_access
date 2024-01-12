@@ -17,14 +17,14 @@ rt_s da_mssql_connection_open(struct da_connection *connection)
 
 	if (RT_UNLIKELY(connection->opened)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
-		connection->u.mssql.last_error_is_mssql = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		goto error;
 	}
 
 	status = SQLAllocHandle(SQL_HANDLE_DBC, environment_handle, &connection_handle);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.mssql.last_error_is_mssql = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		goto error;
 	}
 	connection->u.mssql.connection_handle = connection_handle;
@@ -36,19 +36,13 @@ rt_s da_mssql_connection_open(struct da_connection *connection)
 		status = SQLSetConnectAttr(connection_handle, SQL_ATTR_AUTOCOMMIT, (SQLPOINTER)SQL_AUTOCOMMIT_OFF, SQL_IS_UINTEGER);
 	}
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.mssql.last_error_is_mssql = RT_TRUE;
-		connection->u.mssql.last_error_handle_type = SQL_HANDLE_DBC;
-		connection->u.mssql.last_error_handle = connection_handle;
+		da_mssql_utils_set_with_last_error(SQL_HANDLE_DBC, connection_handle);
 		goto error;
 	}
 
 	status = SQLDriverConnect(connection_handle, RT_NULL, (SQLCHAR*)connection_string, SQL_NTS, RT_NULL, 0, RT_NULL, SQL_DRIVER_NOPROMPT);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.mssql.last_error_is_mssql = RT_TRUE;
-		connection->u.mssql.last_error_handle_type = SQL_HANDLE_DBC;
-		connection->u.mssql.last_error_handle = connection_handle;
+		da_mssql_utils_set_with_last_error(SQL_HANDLE_DBC, connection_handle);
 		goto error;
 	}
 	connected = RT_TRUE;
@@ -78,7 +72,7 @@ rt_s da_mssql_connection_create_statement(struct da_connection *connection, stru
 
 	if (RT_UNLIKELY(!connection->opened)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
-		connection->u.mssql.last_error_is_mssql = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		goto error;
 	}
 
@@ -88,8 +82,6 @@ rt_s da_mssql_connection_create_statement(struct da_connection *connection, stru
 	statement->select_prepared = &da_mssql_statement_select_prepared;
 	statement->free = &da_mssql_statement_free;
 
-	statement->last_error_message_provider.append = &da_mssql_statement_append_last_error_message;
-
 	statement->connection = connection;
 
 	statement->prepared_sql = RT_NULL;
@@ -98,7 +90,7 @@ rt_s da_mssql_connection_create_statement(struct da_connection *connection, stru
 	status = SQLAllocHandle(SQL_HANDLE_STMT, connection_handle, &statement_handle);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.mssql.last_error_is_mssql = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		goto error;
 	}
 
@@ -141,10 +133,7 @@ rt_s da_mssql_connection_commit(struct da_connection *connection)
 
 	status = SQLEndTran(SQL_HANDLE_DBC, connection_handle, SQL_COMMIT);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.mssql.last_error_is_mssql = RT_TRUE;
-		connection->u.mssql.last_error_handle_type = SQL_HANDLE_DBC;
-		connection->u.mssql.last_error_handle = connection_handle;
+		da_mssql_utils_set_with_last_error(SQL_HANDLE_DBC, connection_handle);
 		goto error;
 	}
 
@@ -165,10 +154,7 @@ rt_s da_mssql_connection_rollback(struct da_connection *connection)
 
 	status = SQLEndTran(SQL_HANDLE_DBC, connection_handle, SQL_ROLLBACK);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.mssql.last_error_is_mssql = RT_TRUE;
-		connection->u.mssql.last_error_handle_type = SQL_HANDLE_DBC;
-		connection->u.mssql.last_error_handle = connection_handle;
+		da_mssql_utils_set_with_last_error(SQL_HANDLE_DBC, connection_handle);
 		goto error;
 	}
 
@@ -197,7 +183,7 @@ rt_s da_mssql_connection_free(struct da_connection *connection)
 		status = SQLDisconnect(connection_handle);
 		if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-			connection->u.mssql.last_error_is_mssql = RT_FALSE;
+			rt_last_error_message_set_with_last_error();
 			ret = RT_FAILED;
 		}
 	}
@@ -206,17 +192,10 @@ rt_s da_mssql_connection_free(struct da_connection *connection)
 		status = SQLFreeHandle(SQL_HANDLE_DBC, connection_handle);
 		if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-			connection->u.mssql.last_error_is_mssql = RT_FALSE;
+			rt_last_error_message_set_with_last_error();
 			ret = RT_FAILED;
 		}
 	}
 
 	return ret;
-}
-
-rt_s da_mssql_connection_append_last_error_message(struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size)
-{
-	struct da_connection *connection = RT_MEMORY_CONTAINER_OF(last_error_message_provider, struct da_connection, last_error_message_provider);
-
-	return da_mssql_utils_append_error_message(connection, buffer, buffer_capacity, buffer_size);
 }

@@ -41,16 +41,12 @@ rt_s da_oracle_result_bind(struct da_result *result, struct da_binding *bindings
 			break;
 		default:
 			rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
-			connection->u.oracle.last_error_is_oracle = RT_FALSE;
+			rt_last_error_message_set_with_last_error();
 			goto error;
 		}
 
 		if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-			connection->u.oracle.last_error_is_oracle = RT_TRUE;
-			connection->u.oracle.last_error_status = status;
-			connection->u.oracle.last_error_handle = error_handle;
-			connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
+			da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
 			goto error;
 		}
 	}
@@ -81,11 +77,7 @@ rt_s da_oracle_result_fetch(struct da_result *result, rt_b *end_of_rows)
 	} else {
 		*end_of_rows = RT_FALSE;
 		if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-			connection->u.oracle.last_error_is_oracle = RT_TRUE;
-			connection->u.oracle.last_error_status = status;
-			connection->u.oracle.last_error_handle = error_handle;
-			connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
+			da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
 			goto error;
 		}
 
@@ -105,7 +97,7 @@ rt_s da_oracle_result_fetch(struct da_result *result, rt_b *end_of_rows)
 			default:
 				/* Provided buffer was too small. */
 				rt_error_set_last(RT_ERROR_INSUFFICIENT_BUFFER);
-				connection->u.oracle.last_error_is_oracle = RT_FALSE;
+				rt_last_error_message_set_with_last_error();
 				goto error;
 			}
 		}
@@ -123,13 +115,4 @@ error:
 rt_s da_oracle_result_free(RT_UNUSED struct da_result *result)
 {
 	return RT_OK;
-}
-
-rt_s da_oracle_result_append_last_error_message(struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size)
-{
-	struct da_result *result = RT_MEMORY_CONTAINER_OF(last_error_message_provider, struct da_result, last_error_message_provider);
-	struct da_statement *statement = result->statement;
-	struct da_connection *connection = statement->connection;
-
-	return da_oracle_utils_append_error_message(connection->u.oracle.last_error_is_oracle, connection->u.oracle.last_error_status, connection->u.oracle.last_error_handle, connection->u.oracle.last_error_handle_type, buffer, buffer_capacity, buffer_size);
 }

@@ -21,15 +21,13 @@ static rt_s da_postgres_statement_execute_internal(struct da_connection *connect
 	local_pg_result = PQexec(pg_conn, sql);
 
 	if (RT_UNLIKELY(!local_pg_result)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.postgres.last_error_is_postgres = RT_TRUE;
+		da_postgres_utils_set_with_last_error(connection);
 		goto error;
 	}
 
 	status = PQresultStatus(local_pg_result);
 	if (RT_UNLIKELY(status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.postgres.last_error_is_postgres = RT_TRUE;
+		da_postgres_utils_set_with_last_error(connection);
 		goto error;
 	}
 
@@ -47,7 +45,7 @@ error:
 	goto free;
 }
 
-static rt_s da_postgres_statement_get_row_count(PGresult *pg_result, struct da_connection *connection, rt_un *row_count)
+static rt_s da_postgres_statement_get_row_count(PGresult *pg_result, rt_un *row_count)
 {
 	const rt_char8* affected_rows;
 	rt_s ret;
@@ -55,11 +53,11 @@ static rt_s da_postgres_statement_get_row_count(PGresult *pg_result, struct da_c
 	affected_rows = PQcmdTuples(pg_result);
 	if (RT_UNLIKELY(!rt_char8_get_size(affected_rows))) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.postgres.last_error_is_postgres = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		goto error;
 	}
 	if (RT_UNLIKELY(!rt_char8_convert_to_un(affected_rows, row_count))) {
-		connection->u.postgres.last_error_is_postgres = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		goto error;
 	}
 
@@ -84,7 +82,7 @@ rt_s da_postgres_statement_execute(struct da_statement *statement, const rt_char
 	pg_result_created = RT_TRUE;
 
 	if (row_count) {
-		if (RT_UNLIKELY(!da_postgres_statement_get_row_count(pg_result, connection, row_count)))
+		if (RT_UNLIKELY(!da_postgres_statement_get_row_count(pg_result, row_count)))
 			goto error;
 	}
 
@@ -113,8 +111,6 @@ rt_s da_postgres_statement_select(struct da_statement *statement, struct da_resu
 	result->fetch = &da_postgres_result_fetch;
 	result->free = &da_postgres_result_free;
 
-	result->last_error_message_provider.append = &da_postgres_result_append_last_error_message;
-
 	result->statement = statement;
 
 	if (RT_UNLIKELY(!da_postgres_statement_execute_internal(connection, sql, &pg_result)))
@@ -140,7 +136,7 @@ error:
 /**
  * Binary data must be in network byte order.
  */
-static rt_s da_postgres_statement_prepare_value(struct da_connection *connection, enum da_binding_type *binding_types, rt_un binding_types_size, void ***batches, rt_un batches_size)
+static rt_s da_postgres_statement_prepare_value(enum da_binding_type *binding_types, rt_un binding_types_size, void ***batches, rt_un batches_size)
 {
 	rt_un row_index;
 	rt_un column_index;
@@ -159,7 +155,7 @@ static rt_s da_postgres_statement_prepare_value(struct da_connection *connection
 						break;
 					default:
 						rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
-						connection->u.postgres.last_error_is_postgres = RT_FALSE;
+						rt_last_error_message_set_with_last_error();
 						goto error;
 				}
 			}
@@ -195,7 +191,7 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 
 	if (RT_UNLIKELY(!batches_size)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
-		connection->u.postgres.last_error_is_postgres = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		goto error;
 	}
 
@@ -203,11 +199,11 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 	if (!statement->prepared) {
 
 		if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&statement->u.postgres.param_formats, binding_types_size * sizeof(rt_n32)))) {
-			connection->u.postgres.last_error_is_postgres = RT_FALSE;
+			rt_last_error_message_set_with_last_error();
 			goto error;
 		}
 		if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&statement->u.postgres.param_lengths, binding_types_size * sizeof(rt_n32)))) {
-			connection->u.postgres.last_error_is_postgres = RT_FALSE;
+			rt_last_error_message_set_with_last_error();
 			goto error;
 		}
 
@@ -224,7 +220,7 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 				break;
 			default:
 				rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
-				connection->u.postgres.last_error_is_postgres = RT_FALSE;
+				rt_last_error_message_set_with_last_error();
 				goto error;
 			}
 		}
@@ -232,15 +228,13 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 		prepare_pg_result = PQprepare(pg_conn, statement_name, prepared_sql, binding_types_size, param_types);
 
 		if (RT_UNLIKELY(!prepare_pg_result)) {
-			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-			connection->u.postgres.last_error_is_postgres = RT_TRUE;
+			da_postgres_utils_set_with_last_error(connection);
 			goto error;
 		}
 
 		status = PQresultStatus(prepare_pg_result);
 		if (RT_UNLIKELY(status != PGRES_COMMAND_OK)) {
-			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-			connection->u.postgres.last_error_is_postgres = RT_TRUE;
+			da_postgres_utils_set_with_last_error(connection);
 			goto error;
 		}
 		statement->prepared = RT_TRUE;
@@ -258,13 +252,13 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 					break;
 				default:
 					rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
-					connection->u.postgres.last_error_is_postgres = RT_FALSE;
+					rt_last_error_message_set_with_last_error();
 					goto error;
 			}
 		}
 	}
 
-	if (RT_UNLIKELY(!da_postgres_statement_prepare_value(connection, binding_types, binding_types_size, batches, batches_size)))
+	if (RT_UNLIKELY(!da_postgres_statement_prepare_value(binding_types, binding_types_size, batches, batches_size)))
 		goto error;
 	values_prepared = RT_TRUE;
 
@@ -286,20 +280,18 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 		*pg_result = PQexecPrepared(pg_conn, statement_name, binding_types_size, param_values, param_lengths, param_formats, 0);
 
 		if (RT_UNLIKELY(!*pg_result)) {
-			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-			connection->u.postgres.last_error_is_postgres = RT_TRUE;
+			da_postgres_utils_set_with_last_error(connection);
 			goto error;
 		}
 
 		status = PQresultStatus(*pg_result);
 		if (RT_UNLIKELY(status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK)) {
-			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-			connection->u.postgres.last_error_is_postgres = RT_TRUE;
+			da_postgres_utils_set_with_last_error(connection);
 			goto error;
 		}
 
 		if (row_count) {
-			if (RT_UNLIKELY(!da_postgres_statement_get_row_count(*pg_result, connection, &local_row_count)))
+			if (RT_UNLIKELY(!da_postgres_statement_get_row_count(*pg_result, &local_row_count)))
 				goto error;
 
 			*row_count += local_row_count;
@@ -310,7 +302,7 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 free:
 	if (values_prepared) {
 		values_prepared = RT_FALSE;
-		if (RT_UNLIKELY(!da_postgres_statement_prepare_value(connection, binding_types, binding_types_size, batches, batches_size) && ret))
+		if (RT_UNLIKELY(!da_postgres_statement_prepare_value(binding_types, binding_types_size, batches, batches_size) && ret))
 			goto error;
 	}
 	if (prepare_pg_result) {
@@ -352,8 +344,6 @@ rt_s da_postgres_statement_select_prepared(struct da_statement *statement, struc
 	result->fetch = &da_postgres_result_fetch;
 	result->free = &da_postgres_result_free;
 
-	result->last_error_message_provider.append = &da_postgres_result_append_last_error_message;
-
 	result->statement = statement;
 
 	if (RT_UNLIKELY(!da_postgres_statement_execute_prepared_internal(statement, binding_types, binding_types_size, &bindings, 1, RT_NULL, &pg_result)))
@@ -379,7 +369,6 @@ error:
 
 rt_s da_postgres_statement_free(struct da_statement *statement)
 {
-	struct da_connection *connection = statement->connection;
 	rt_char8 *statement_name;
 	rt_un statement_name_size;
 	rt_char8 buffer[256];
@@ -390,7 +379,7 @@ rt_s da_postgres_statement_free(struct da_statement *statement)
 		buffer_size = 12;
 		if (RT_UNLIKELY(!rt_char8_copy("deallocate \"", buffer_size, buffer, 256))) {
 			/* Last error has been set by rt_char8_copy. */
-			connection->u.postgres.last_error_is_postgres = RT_FALSE;
+			rt_last_error_message_set_with_last_error();
 			ret = RT_FAILED;
 		} else {
 			statement_name = statement->u.postgres.statement_name;
@@ -398,12 +387,12 @@ rt_s da_postgres_statement_free(struct da_statement *statement)
 
 			if (RT_UNLIKELY(!rt_char8_append(statement_name, statement_name_size, buffer, 256, &buffer_size))) {
 				/* Last error has been set by rt_char8_append. */
-				connection->u.postgres.last_error_is_postgres = RT_FALSE;
+				rt_last_error_message_set_with_last_error();
 				ret = RT_FAILED;
 			} else {
 				if (RT_UNLIKELY(!rt_char8_append_char('"', buffer, 256, &buffer_size))) {
 					/* Last error has been set by rt_char8_append_char. */
-					connection->u.postgres.last_error_is_postgres = RT_FALSE;
+					rt_last_error_message_set_with_last_error();
 					ret = RT_FAILED;
 				} else {
 					if (RT_UNLIKELY(!statement->execute(statement, buffer, RT_NULL))) {
@@ -417,23 +406,15 @@ rt_s da_postgres_statement_free(struct da_statement *statement)
 
 	if (RT_UNLIKELY(!rt_static_heap_free((void**)&statement->u.postgres.param_lengths))) {
 		/* Last error has been set by rt_static_heap_free. */
-		connection->u.postgres.last_error_is_postgres = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		ret = RT_FAILED;
 	}
 
 	if (RT_UNLIKELY(!rt_static_heap_free((void**)&statement->u.postgres.param_formats))) {
 		/* Last error has been set by rt_static_heap_free. */
-		connection->u.postgres.last_error_is_postgres = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		ret = RT_FAILED;
 	}
 
 	return ret;
-}
-
-rt_s da_postgres_statement_append_last_error_message(struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size)
-{
-	struct da_statement *statement = RT_MEMORY_CONTAINER_OF(last_error_message_provider, struct da_statement, last_error_message_provider);
-	struct da_connection *connection = statement->connection;
-
-	return da_postgres_utils_append_error_message(connection, buffer, buffer_capacity, buffer_size);
 }

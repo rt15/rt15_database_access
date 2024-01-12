@@ -12,14 +12,6 @@ enum da_database_type {
 	DA_DATABASE_TYPE_POSTGRES
 };
 
-struct da_last_error_message_provider;
-
-typedef rt_s (*da_last_error_message_provider_append_t)(struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size);
-
-struct da_last_error_message_provider {
-	da_last_error_message_provider_append_t append;
-};
-
 struct da_result;
 struct da_statement;
 struct da_connection;
@@ -55,7 +47,6 @@ struct da_result {
 	da_result_bind_t bind;
 	da_result_fetch_t fetch;
 	da_result_free_t free;
-	struct da_last_error_message_provider last_error_message_provider;
 	struct da_statement *statement;
 	struct da_binding *bindings;
 	rt_un bindings_size;
@@ -80,7 +71,6 @@ struct da_statement {
 	da_statement_execute_prepared_t execute_prepared;
 	da_statement_select_prepared_t select_prepared;
 	da_statement_free_t free;
-	struct da_last_error_message_provider last_error_message_provider;
 	struct da_connection *connection;
 	const rt_char8 *prepared_sql;
 	rt_b prepared;
@@ -115,7 +105,6 @@ struct da_connection {
 	da_connection_commit_t commit;
 	da_connection_rollback_t rollback;
 	da_connection_free_t free;
-	struct da_last_error_message_provider last_error_message_provider;
 	struct da_data_source *data_source;
 	rt_b auto_commit;
 	rt_b opened;
@@ -151,7 +140,6 @@ struct da_data_source {
 	da_data_source_open_t open;
 	da_data_source_create_connection_t create_connection;
 	da_data_source_free_t free;
-	struct da_last_error_message_provider last_error_message_provider;
 	struct da_driver *driver;
 	rt_b opened;
 	union {
@@ -190,7 +178,6 @@ typedef rt_s (*da_driver_free_t)(struct da_driver *driver);
 struct da_driver {
 	da_driver_create_data_source_t create_data_source;
 	da_driver_free_t free;
-	struct da_last_error_message_provider last_error_message_provider;
 	union {
 		struct {
 			void *environment_handle;

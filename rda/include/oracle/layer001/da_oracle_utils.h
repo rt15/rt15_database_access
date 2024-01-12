@@ -3,6 +3,6 @@
 
 #include <rpr.h>
 
-RT_EXPORT rt_s da_oracle_utils_append_error_message(rt_b is_oracle, rt_n32 error_status, void *error_handle, rt_un32 error_handle_type, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size);
+RT_EXPORT rt_s da_oracle_utils_set_with_last_error(rt_n32 error_status, void *error_handle, rt_un32 error_handle_type);
 
 #endif /* DA_ORACLE_UTILS_H */

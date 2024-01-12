@@ -14,18 +14,14 @@ rt_s da_oracle_connection_open(struct da_connection *connection)
 
 	if (RT_UNLIKELY(connection->opened)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
-		connection->u.oracle.last_error_is_oracle = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		goto error;
 	}
 
 	/* Open the connection. */
 	status = OCISessionBegin(service_context_handle, error_handle, session_handle, OCI_CRED_RDBMS, OCI_DEFAULT);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.oracle.last_error_is_oracle = RT_TRUE;
-		connection->u.oracle.last_error_status = status;
-		connection->u.oracle.last_error_handle = error_handle;
-		connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
+		da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
 		goto error;
 	}
 	connection->opened = RT_TRUE;
@@ -33,11 +29,7 @@ rt_s da_oracle_connection_open(struct da_connection *connection)
 	/* Associate the session with the service context */
 	status = OCIAttrSet(service_context_handle, OCI_HTYPE_SVCCTX, session_handle, 0, OCI_ATTR_SESSION, error_handle);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.oracle.last_error_is_oracle = RT_TRUE;
-		connection->u.oracle.last_error_status = status;
-		connection->u.oracle.last_error_handle = error_handle;
-		connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
+		da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
 		goto error;
 	}
 
@@ -60,7 +52,7 @@ rt_s da_oracle_connection_create_statement(struct da_connection *connection, str
 
 	if (RT_UNLIKELY(!connection->opened)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
-		connection->u.oracle.last_error_is_oracle = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		goto error;
 	}
 
@@ -70,8 +62,6 @@ rt_s da_oracle_connection_create_statement(struct da_connection *connection, str
 	statement->select_prepared = &da_oracle_statement_select_prepared;
 	statement->free = &da_oracle_statement_free;
 
-	statement->last_error_message_provider.append = &da_oracle_statement_append_last_error_message;
-
 	statement->connection = connection;
 
 	statement->prepared_sql = RT_NULL;
@@ -80,11 +70,7 @@ rt_s da_oracle_connection_create_statement(struct da_connection *connection, str
 	/* Statement handle. */
 	status = OCIHandleAlloc(environment_handle, (void**)&statement_handle, OCI_HTYPE_STMT, 0, NULL);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.oracle.last_error_is_oracle = RT_TRUE;
-		connection->u.oracle.last_error_status = status;
-		connection->u.oracle.last_error_handle = environment_handle;
-		connection->u.oracle.last_error_handle_type = OCI_HTYPE_ENV;
+		da_oracle_utils_set_with_last_error(status, environment_handle, OCI_HTYPE_ENV);
 		goto error;
 	}
 	statement_handle_created = RT_TRUE;
@@ -132,11 +118,7 @@ rt_s da_oracle_connection_commit(struct da_connection *connection)
 
 	status = OCITransCommit(service_context_handle, error_handle, OCI_DEFAULT);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.oracle.last_error_is_oracle = RT_TRUE;
-		connection->u.oracle.last_error_status = status;
-		connection->u.oracle.last_error_handle = error_handle;
-		connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
+		da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
 		goto error;
 	}
 
@@ -158,11 +140,7 @@ rt_s da_oracle_connection_rollback(struct da_connection *connection)
 
 	status = OCITransRollback(service_context_handle, error_handle, OCI_DEFAULT);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.oracle.last_error_is_oracle = RT_TRUE;
-		connection->u.oracle.last_error_status = status;
-		connection->u.oracle.last_error_handle = error_handle;
-		connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
+		da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
 		goto error;
 	}
 
@@ -237,11 +215,4 @@ rt_s da_oracle_connection_free(struct da_connection *connection)
 	}
 
 	return ret;
-}
-
-rt_s da_oracle_connection_append_last_error_message(struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size)
-{
-	struct da_connection *connection = RT_MEMORY_CONTAINER_OF(last_error_message_provider, struct da_connection, last_error_message_provider);
-
-	return da_oracle_utils_append_error_message(connection->u.oracle.last_error_is_oracle, connection->u.oracle.last_error_status, connection->u.oracle.last_error_handle, connection->u.oracle.last_error_handle_type, buffer, buffer_capacity, buffer_size);
 }

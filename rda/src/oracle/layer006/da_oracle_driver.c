@@ -19,36 +19,45 @@ rt_s da_oracle_driver_create_data_source(struct da_driver *driver, struct da_dat
 	data_source->create_connection = &da_oracle_data_source_create_connection;
 	data_source->free = &da_oracle_data_source_free;
 
-	data_source->last_error_message_provider.append = &da_oracle_data_source_append_last_error_message;
-
 	data_source->driver = driver;
 
 	data_source->opened = RT_FALSE;
 
-	/* Make sure last error is ready in case an rt_char8 function fails. */
-	data_source->u.oracle.last_error_is_oracle = RT_FALSE;
-
 	data_source->u.oracle.user_name_size = rt_char8_get_size(user_name);
-	if (RT_UNLIKELY(!rt_char8_copy(user_name, data_source->u.oracle.user_name_size, data_source->u.oracle.user_name, DA_IDENTIFIER_SIZE))) goto error;
+	if (RT_UNLIKELY(!rt_char8_copy(user_name, data_source->u.oracle.user_name_size, data_source->u.oracle.user_name, DA_IDENTIFIER_SIZE))) {
+		rt_last_error_message_set_with_last_error();
+		goto error;
+	}
 	data_source->u.oracle.password_size = rt_char8_get_size(password);
-	if (RT_UNLIKELY(!rt_char8_copy(password, data_source->u.oracle.password_size, data_source->u.oracle.password, DA_IDENTIFIER_SIZE))) goto error;
+	if (RT_UNLIKELY(!rt_char8_copy(password, data_source->u.oracle.password_size, data_source->u.oracle.password, DA_IDENTIFIER_SIZE))) {
+		rt_last_error_message_set_with_last_error();
+		goto error;
+	}
 
 	/* Build the connection string. */
 	connection_string_size = rt_char8_get_size(host_name);
-	if (RT_UNLIKELY(!rt_char8_copy(host_name, connection_string_size, data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE))) goto error;
-	if (RT_UNLIKELY(!rt_char8_append_char(':', data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE, &connection_string_size))) goto error;
-	if (RT_UNLIKELY(!rt_char8_append_un(port, 10, data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE, &connection_string_size))) goto error;
-	if (RT_UNLIKELY(!rt_char8_append(database, rt_char8_get_size(database), data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE, &connection_string_size))) goto error;
+	if (RT_UNLIKELY(!rt_char8_copy(host_name, connection_string_size, data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE))) {
+		rt_last_error_message_set_with_last_error();
+		goto error;
+	}
+	if (RT_UNLIKELY(!rt_char8_append_char(':', data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE, &connection_string_size))) {
+		rt_last_error_message_set_with_last_error();
+		goto error;
+	}
+	if (RT_UNLIKELY(!rt_char8_append_un(port, 10, data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE, &connection_string_size))) {
+		rt_last_error_message_set_with_last_error();
+		goto error;
+	}
+	if (RT_UNLIKELY(!rt_char8_append(database, rt_char8_get_size(database), data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE, &connection_string_size))) {
+		rt_last_error_message_set_with_last_error();
+		goto error;
+	}
 	data_source->u.oracle.connection_string_size = connection_string_size;
 
 	/* Error handle. */
 	status = OCIHandleAlloc(environment_handle, (void**)&error_handle, OCI_HTYPE_ERROR, 0, NULL);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		driver->u.oracle.last_error_is_oracle = RT_TRUE;
-		driver->u.oracle.last_error_status = status;
-		driver->u.oracle.last_error_handle = environment_handle;
-		driver->u.oracle.last_error_handle_type = OCI_HTYPE_ENV;
+		da_oracle_utils_set_with_last_error(status, environment_handle, OCI_HTYPE_ENV);
 		goto error;
 	}
 	error_handle_created = RT_TRUE;
@@ -56,11 +65,7 @@ rt_s da_oracle_driver_create_data_source(struct da_driver *driver, struct da_dat
 	/* Server handle. */
 	status = OCIHandleAlloc(environment_handle, (void**)&server_handle, OCI_HTYPE_SERVER, 0, NULL);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		driver->u.oracle.last_error_is_oracle = RT_TRUE;
-		driver->u.oracle.last_error_status = status;
-		driver->u.oracle.last_error_handle = environment_handle;
-		driver->u.oracle.last_error_handle_type = OCI_HTYPE_ENV;
+		da_oracle_utils_set_with_last_error(status, environment_handle, OCI_HTYPE_ENV);
 		goto error;
 	}
 	server_handle_created = RT_TRUE;
@@ -92,11 +97,7 @@ rt_s da_oracle_driver_free(struct da_driver *driver)
 
 	status = OCIHandleFree((OCIEnv*)driver->u.oracle.environment_handle, OCI_HTYPE_ENV);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		driver->u.oracle.last_error_is_oracle = RT_TRUE;
-		driver->u.oracle.last_error_status = status;
-		driver->u.oracle.last_error_handle = RT_NULL;
-		driver->u.oracle.last_error_handle_type = 0;
+		da_oracle_utils_set_with_last_error(status, RT_NULL, 0);
 		goto error;
 	}
 
@@ -109,13 +110,6 @@ error:
 	goto free;
 }
 
-rt_s da_oracle_driver_append_last_error_message(struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size)
-{
-	struct da_driver *driver = RT_MEMORY_CONTAINER_OF(last_error_message_provider, struct da_driver, last_error_message_provider);
-
-	return da_oracle_utils_append_error_message(driver->u.oracle.last_error_is_oracle, driver->u.oracle.last_error_status, driver->u.oracle.last_error_handle, driver->u.oracle.last_error_handle_type, buffer, buffer_capacity, buffer_size);
-}
-
 rt_s da_oracle_driver_create(struct da_driver *driver)
 {
 	sword status;
@@ -124,16 +118,10 @@ rt_s da_oracle_driver_create(struct da_driver *driver)
 	driver->create_data_source = &da_oracle_driver_create_data_source;
 	driver->free = &da_oracle_driver_free;
 
-	driver->last_error_message_provider.append = &da_oracle_driver_append_last_error_message;
-
 	/* Initialize environment and get an environment handle. */
 	status = OCIEnvCreate((OCIEnv**)&driver->u.oracle.environment_handle, OCI_DEFAULT, NULL, NULL, NULL, NULL, 0, NULL);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		driver->u.oracle.last_error_is_oracle = RT_TRUE;
-		driver->u.oracle.last_error_status = status;
-		driver->u.oracle.last_error_handle = RT_NULL;
-		driver->u.oracle.last_error_handle_type = 0;
+		da_oracle_utils_set_with_last_error(status, RT_NULL, 0);
 		goto error;
 	}
 

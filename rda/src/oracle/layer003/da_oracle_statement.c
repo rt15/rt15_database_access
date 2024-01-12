@@ -19,11 +19,7 @@ static rt_s da_oracle_statement_execute_internal(OCIStmt *statement_handle, OCIE
 
 	status = OCIStmtPrepare(statement_handle, error_handle, (OraText*)sql, rt_char8_get_size(sql), OCI_NTV_SYNTAX, OCI_DEFAULT);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.oracle.last_error_is_oracle = RT_TRUE;
-		connection->u.oracle.last_error_status = status;
-		connection->u.oracle.last_error_handle = error_handle;
-		connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
+		da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
 		goto error;
 	}
 
@@ -34,11 +30,7 @@ static rt_s da_oracle_statement_execute_internal(OCIStmt *statement_handle, OCIE
 
 	status = OCIStmtExecute(service_context_handle, statement_handle, error_handle, iters, 0, NULL, NULL, mode);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.oracle.last_error_is_oracle = RT_TRUE;
-		connection->u.oracle.last_error_status = status;
-		connection->u.oracle.last_error_handle = error_handle;
-		connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
+		da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
 		goto error;
 	}
 
@@ -51,7 +43,7 @@ error:
 	goto free;
 }
 
-static rt_s da_oracle_statement_get_row_count(OCIStmt *statement_handle, OCIError *error_handle, struct da_connection *connection, rt_un *row_count)
+static rt_s da_oracle_statement_get_row_count(OCIStmt *statement_handle, OCIError *error_handle, rt_un *row_count)
 {
 	ub4 oracle_row_count;
 	sword status;
@@ -59,11 +51,7 @@ static rt_s da_oracle_statement_get_row_count(OCIStmt *statement_handle, OCIErro
 
 	status = OCIAttrGet(statement_handle, OCI_HTYPE_STMT, &oracle_row_count, 0, OCI_ATTR_ROW_COUNT, error_handle);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.oracle.last_error_is_oracle = RT_TRUE;
-		connection->u.oracle.last_error_status = status;
-		connection->u.oracle.last_error_handle = error_handle;
-		connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
+		da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
 		goto error;
 	}
 
@@ -89,7 +77,7 @@ rt_s da_oracle_statement_execute(struct da_statement *statement, const rt_char8 
 		goto error;
 
 	if (row_count) {
-		if (RT_UNLIKELY(!da_oracle_statement_get_row_count(statement_handle, error_handle, connection, row_count)))
+		if (RT_UNLIKELY(!da_oracle_statement_get_row_count(statement_handle, error_handle, row_count)))
 			goto error;
 	}
 
@@ -112,8 +100,6 @@ RT_EXPORT rt_s da_oracle_statement_select(struct da_statement *statement, struct
 	result->bind = &da_oracle_result_bind;
 	result->fetch = &da_oracle_result_fetch;
 	result->free = &da_oracle_result_free;
-
-	result->last_error_message_provider.append = &da_oracle_result_append_last_error_message;
 
 	result->statement = statement;
 
@@ -154,18 +140,14 @@ static rt_s da_oracle_statement_execute_prepared_internal(struct da_statement *s
 	if (!statement->prepared) {
 		status = OCIStmtPrepare(statement_handle, error_handle, (OraText*)sql, rt_char8_get_size(sql), OCI_NTV_SYNTAX, OCI_DEFAULT);
 		if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-			connection->u.oracle.last_error_is_oracle = RT_TRUE;
-			connection->u.oracle.last_error_status = status;
-			connection->u.oracle.last_error_handle = error_handle;
-			connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
+			da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
 			goto error;
 		}
 		statement->prepared = RT_TRUE;
 	}
 
 	if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&bindings, binding_types_size * sizeof(struct da_oracle_statement_binding)))) {
-		connection->u.oracle.last_error_is_oracle = RT_FALSE;
+		rt_last_error_message_set_with_last_error();
 		goto error;
 	}
 	for (column_index = 0; column_index < binding_types_size; column_index++) {
@@ -181,12 +163,12 @@ static rt_s da_oracle_statement_execute_prepared_internal(struct da_statement *s
 		parameter_name[1] = 0;
 		parameter_name_size = 1;
 		if (RT_UNLIKELY(!rt_char8_append_un(column_index + 1, 10, parameter_name, 8, &parameter_name_size))) {
-			connection->u.oracle.last_error_is_oracle = RT_FALSE;
+			rt_last_error_message_set_with_last_error();
 			goto error;
 		}
 
 		if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&bindings[column_index].indicators, batches_size * sizeof(rt_n16)))) {
-			connection->u.oracle.last_error_is_oracle = RT_FALSE;
+			rt_last_error_message_set_with_last_error();
 			goto error;
 		}
 
@@ -206,7 +188,7 @@ static rt_s da_oracle_statement_execute_prepared_internal(struct da_statement *s
 		} else {
 
 			if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&bindings[column_index].lengths, batches_size * sizeof(rt_un16)))) {
-				connection->u.oracle.last_error_is_oracle = RT_FALSE;
+				rt_last_error_message_set_with_last_error();
 				goto error;
 			}
 
@@ -225,7 +207,7 @@ static rt_s da_oracle_statement_execute_prepared_internal(struct da_statement *s
 				}
 
 				if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&bindings[column_index].values, batches_size * max_length))) {
-					connection->u.oracle.last_error_is_oracle = RT_FALSE;
+					rt_last_error_message_set_with_last_error();
 					goto error;
 				}
 
@@ -233,7 +215,7 @@ static rt_s da_oracle_statement_execute_prepared_internal(struct da_statement *s
 				for (row_index = 0; row_index < batches_size; row_index++) {
 					if (batches[row_index][column_index]) {
 						if (RT_UNLIKELY(!rt_char8_copy(batches[row_index][column_index], bindings[column_index].lengths[row_index] - 1, &bindings[column_index].values[row_index * max_length], max_length))) {
-							connection->u.oracle.last_error_is_oracle = RT_FALSE;
+							rt_last_error_message_set_with_last_error();
 							goto error;
 						}
 					}
@@ -243,7 +225,7 @@ static rt_s da_oracle_statement_execute_prepared_internal(struct da_statement *s
 				break;
 			case DA_BINDING_TYPE_N32:
 				if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&bindings[column_index].values, batches_size * sizeof(rt_n32)))) {
-					connection->u.oracle.last_error_is_oracle = RT_FALSE;
+					rt_last_error_message_set_with_last_error();
 					goto error;
 				}
 				n32_values = (rt_n32*)bindings[column_index].values;
@@ -257,7 +239,7 @@ static rt_s da_oracle_statement_execute_prepared_internal(struct da_statement *s
 				break;
 			default:
 				rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
-				connection->u.oracle.last_error_is_oracle = RT_FALSE;
+				rt_last_error_message_set_with_last_error();
 				goto error;
 			}
 		}
@@ -265,11 +247,7 @@ static rt_s da_oracle_statement_execute_prepared_internal(struct da_statement *s
 		bind_handle = RT_NULL;
 		status = OCIBindByName(statement_handle, &bind_handle, error_handle, (OraText*)parameter_name, parameter_name_size, bindings[column_index].values, max_length, data_type, bindings[column_index].indicators, bindings[column_index].lengths, RT_NULL, 0, RT_NULL, OCI_DEFAULT);
 		if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-			connection->u.oracle.last_error_is_oracle = RT_TRUE;
-			connection->u.oracle.last_error_status = status;
-			connection->u.oracle.last_error_handle = error_handle;
-			connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
+			da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
 			goto error;
 		}
 	}
@@ -281,11 +259,7 @@ static rt_s da_oracle_statement_execute_prepared_internal(struct da_statement *s
 
 	status = OCIStmtExecute(service_context_handle, statement_handle, error_handle, iters, 0, RT_NULL, RT_NULL, mode);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.oracle.last_error_is_oracle = RT_TRUE;
-		connection->u.oracle.last_error_status = status;
-		connection->u.oracle.last_error_handle = error_handle;
-		connection->u.oracle.last_error_handle_type = OCI_HTYPE_ERROR;
+		da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
 		goto error;
 	}
 
@@ -294,20 +268,20 @@ free:
 	if (bindings) {
 		for (column_index = 0; column_index < binding_types_size; column_index++) {
 			if (RT_UNLIKELY(!rt_static_heap_free((void**)&bindings[column_index].indicators) && ret)) {
-				connection->u.oracle.last_error_is_oracle = RT_FALSE;
+				rt_last_error_message_set_with_last_error();
 				goto error;
 			}
 			if (RT_UNLIKELY(!rt_static_heap_free((void**)&bindings[column_index].lengths) && ret)) {
-				connection->u.oracle.last_error_is_oracle = RT_FALSE;
+				rt_last_error_message_set_with_last_error();
 				goto error;
 			}
 			if (RT_UNLIKELY(!rt_static_heap_free((void**)&bindings[column_index].values) && ret)) {
-				connection->u.oracle.last_error_is_oracle = RT_FALSE;
+				rt_last_error_message_set_with_last_error();
 				goto error;
 			}
 		}
 		if (RT_UNLIKELY(!rt_static_heap_free((void**)&bindings) && ret)) {
-			connection->u.oracle.last_error_is_oracle = RT_FALSE;
+			rt_last_error_message_set_with_last_error();
 			goto error;
 		}
 	}
@@ -329,7 +303,7 @@ rt_s da_oracle_statement_execute_prepared(struct da_statement *statement, enum d
 		goto error;
 
 	if (row_count) {
-		if (RT_UNLIKELY(!da_oracle_statement_get_row_count(statement_handle, error_handle, connection, row_count)))
+		if (RT_UNLIKELY(!da_oracle_statement_get_row_count(statement_handle, error_handle, row_count)))
 			goto error;
 	}
 
@@ -350,8 +324,6 @@ rt_s da_oracle_statement_select_prepared(struct da_statement *statement, struct 
 	result->fetch = &da_oracle_result_fetch;
 	result->free = &da_oracle_result_free;
 
-	result->last_error_message_provider.append = &da_oracle_result_append_last_error_message;
-
 	result->statement = statement;
 
 	if (RT_UNLIKELY(!da_oracle_statement_execute_prepared_internal(statement, binding_types, binding_types_size, &bindings, 1, 0)))
@@ -368,27 +340,14 @@ error:
 
 rt_s da_oracle_statement_free(struct da_statement *statement)
 {
-	struct da_connection *connection = statement->connection;
 	sword status;
 	rt_s ret = RT_OK;
 
 	status = OCIHandleFree(statement->u.oracle.statement_handle, OCI_HTYPE_STMT);
 	if (RT_UNLIKELY(status != OCI_SUCCESS && ret)) {
-		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
-		connection->u.oracle.last_error_is_oracle = RT_TRUE;
-		connection->u.oracle.last_error_status = status;
-		connection->u.oracle.last_error_handle = RT_NULL;
-		connection->u.oracle.last_error_handle_type = 0;
+		da_oracle_utils_set_with_last_error(status, RT_NULL, 0);
 		ret = RT_FAILED;
 	}
 
 	return ret;
-}
-
-rt_s da_oracle_statement_append_last_error_message(struct da_last_error_message_provider *last_error_message_provider, rt_char *buffer, rt_un buffer_capacity, rt_un *buffer_size)
-{
-	struct da_statement *statement = RT_MEMORY_CONTAINER_OF(last_error_message_provider, struct da_statement, last_error_message_provider);
-	struct da_connection *connection = statement->connection;
-
-	return da_oracle_utils_append_error_message(connection->u.oracle.last_error_is_oracle, connection->u.oracle.last_error_status, connection->u.oracle.last_error_handle, connection->u.oracle.last_error_handle_type, buffer, buffer_capacity, buffer_size);
 }
