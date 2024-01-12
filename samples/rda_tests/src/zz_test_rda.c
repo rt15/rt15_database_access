@@ -1,20 +1,26 @@
 #include <rpr.h>
-#include <rda.h>
+#include <rda_mssql.h>
+#include <rda_oracle.h>
+#include <rda_postgres.h>
 
 static rt_s zz_create_driver(struct da_driver *driver, enum da_database_type database_type)
 {
+	const rt_char *database_type_name;
 	rt_s ret;
 
 	switch (database_type) {
 	case DA_DATABASE_TYPE_MSSQL:
+		database_type_name = _R("MSSQL\n");
 		if (RT_UNLIKELY(!da_mssql_driver_create(driver)))
 			goto error;
 		break;
 	case DA_DATABASE_TYPE_ORACLE:
+		database_type_name = _R("ORACLE\n");
 		if (RT_UNLIKELY(!da_oracle_driver_create(driver)))
 			goto error;
 		break;
 	case DA_DATABASE_TYPE_POSTGRES:
+		database_type_name = _R("POSTGRES\n");
 		if (RT_UNLIKELY(!da_postgres_driver_create(driver)))
 			goto error;
 		break;
@@ -22,6 +28,9 @@ static rt_s zz_create_driver(struct da_driver *driver, enum da_database_type dat
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		goto error;
 	}
+
+	if (RT_UNLIKELY(!rt_console_write_string(database_type_name)))
+		goto error;
 
 	ret = RT_OK;
 free:

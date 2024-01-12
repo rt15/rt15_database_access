@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.13.4)
 
-project(rda_tests)
+project(rda_oracle)
 
-set(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../..)
+set(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m64")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -ansi -pedantic -Wextra")
@@ -16,7 +17,6 @@ string(REPLACE "-O3" "-O2" CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
 
 if(WIN32)
         add_compile_definitions(WIN32)
-        add_compile_definitions(_CONSOLE)
         add_link_options("-nostartfiles" "-nodefaultlibs" "-nostdlib" "-ffreestanding" "-Xlinker" "--stack=0x100000,0x100000")
 endif()
 
@@ -31,22 +31,21 @@ endif()
 
 include_directories(include)
 
-include_directories(${PARENT_DIR}/rt15_database_access/rda_mssql/include)
-include_directories(${PARENT_DIR}/rt15_database_access/rda_oracle/include)
-include_directories(${PARENT_DIR}/rt15_database_access/rda_postgres/include)
-include_directories(${PARENT_DIR}/rt15_database_access/rda/include)
 include_directories(${PARENT_DIR}/rt15_portable_runtime/rpr/include)
+include_directories(${PARENT_DIR}/rt15_database_access/rda/include)
+include_directories(${PARENT_DIR}/libs/oracle/win64/include)
 
-link_directories(${PARENT_DIR}/rt15_database_access/rda_mssql/lib)
-link_directories(${PARENT_DIR}/rt15_database_access/rda_oracle/lib)
-link_directories(${PARENT_DIR}/rt15_database_access/rda_postgres/lib)
 link_directories(${PARENT_DIR}/rt15_portable_runtime/rpr/lib)
+link_directories(${PARENT_DIR}/libs/oracle/win64/lib/msvc)
 
-link_libraries(rda_mssql${BINARY_SUFFIX})
-link_libraries(rda_oracle${BINARY_SUFFIX})
-link_libraries(rda_postgres${BINARY_SUFFIX})
 link_libraries(rpr${BINARY_SUFFIX})
+link_libraries(oci)
 
 file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c")
 
-add_executable(${PROJECT_NAME}${BINARY_SUFFIX} ${SOURCES})
+add_library(${PROJECT_NAME}${BINARY_SUFFIX} SHARED ${SOURCES})
+
+# Remove the lib prefix from the dll name.
+if(WIN32)
+        set_property(TARGET ${PROJECT_NAME}${BINARY_SUFFIX} PROPERTY PREFIX "")
+endif()
