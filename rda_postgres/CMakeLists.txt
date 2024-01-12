@@ -6,6 +6,7 @@ set(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m64")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -ansi -pedantic -Wextra")
@@ -33,10 +34,14 @@ include_directories(include)
 
 include_directories(${PARENT_DIR}/rt15_portable_runtime/rpr/include)
 include_directories(${PARENT_DIR}/rt15_database_access/rda/include)
+if(WIN32)
 include_directories(${PARENT_DIR}/libs/postgres/win64/include)
+endif()
 
 link_directories(${PARENT_DIR}/rt15_portable_runtime/rpr/lib)
+if(WIN32)
 link_directories(${PARENT_DIR}/libs/postgres/win64/lib)
+endif()
 
 link_libraries(rpr${BINARY_SUFFIX})
 link_libraries(pq)

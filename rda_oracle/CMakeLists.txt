@@ -6,6 +6,7 @@ set(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m64")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -ansi -pedantic -Wextra")
@@ -33,13 +34,33 @@ include_directories(include)
 
 include_directories(${PARENT_DIR}/rt15_portable_runtime/rpr/include)
 include_directories(${PARENT_DIR}/rt15_database_access/rda/include)
+if(WIN32)
 include_directories(${PARENT_DIR}/libs/oracle/win64/include)
+else()
+include_directories(/usr/include/oracle/12.2/client64)
+endif()
 
 link_directories(${PARENT_DIR}/rt15_portable_runtime/rpr/lib)
+if(WIN32)
 link_directories(${PARENT_DIR}/libs/oracle/win64/lib/msvc)
+else()
+link_directories(/usr/lib/oracle/12.2/client64/lib)
+endif()
 
 link_libraries(rpr${BINARY_SUFFIX})
+# On Linux:
+# rpm -ivh oracle-instantclient12.2-basic-12.2.0.1.0-1.x86_64.rpm
+# rpm -ivh oracle-instantclient12.2-devel-12.2.0.1.0-1.x86_64.rpm
+if(WIN32)
 link_libraries(oci)
+else()
+link_libraries(clntsh)
+link_libraries(mql1)
+link_libraries(ipc1)
+link_libraries(nnz12)
+link_libraries(ons)
+link_libraries(clntshcore)
+endif()
 
 file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c")
 

@@ -35,7 +35,7 @@ rt_s da_mssql_result_bind(struct da_result *result, struct da_binding *bindings,
 			rt_last_error_message_set_with_last_error();
 			goto error;
 		}
-		status = SQLBindCol(statement_handle, column_index + 1, c_type, buffer, buffer_capacity, (rt_n64*)&bindings[column_index].reserved);
+		status = SQLBindCol(statement_handle, column_index + 1, c_type, buffer, buffer_capacity, (SQLLEN*)&bindings[column_index].reserved);
 		if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 			da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
 			goto error;
