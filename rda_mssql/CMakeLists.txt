@@ -41,7 +41,10 @@ link_libraries(rpr${BINARY_SUFFIX})
 if(WIN32)
         link_libraries(odbc32)
 else()
+        # To compile:
         # yum install unixODBC-devel
+        # To install the driver:
+        # yum install msodbcsql17
         link_libraries(odbc)
 endif()
 
