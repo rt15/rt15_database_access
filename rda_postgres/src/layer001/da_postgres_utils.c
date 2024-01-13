@@ -20,6 +20,7 @@ RT_EXPORT rt_s da_postgres_utils_set_with_last_error(struct da_connection *conne
 		goto error;
 	}
 
+	rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 	if (RT_UNLIKELY(!rt_last_error_message_set(buffer))) {
 		rt_last_error_message_set_with_last_error();
 		goto error;

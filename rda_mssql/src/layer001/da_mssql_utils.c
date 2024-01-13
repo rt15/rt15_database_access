@@ -26,6 +26,7 @@ rt_s da_mssql_utils_set_with_last_error(rt_n16 handle_type, void *handle)
 		goto error;
 	}
 
+	rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 	if (RT_UNLIKELY(!rt_last_error_message_set(buffer))) {
 		rt_last_error_message_set_with_last_error();
 		goto error;

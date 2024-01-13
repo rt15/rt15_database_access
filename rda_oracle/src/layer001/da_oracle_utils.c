@@ -27,6 +27,7 @@ rt_s da_oracle_utils_set_with_last_error(rt_n32 error_status, void *error_handle
 			goto error;
 		}
 
+		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		if (RT_UNLIKELY(!rt_last_error_message_set(buffer))) {
 			rt_last_error_message_set_with_last_error();
 			goto error;
@@ -63,6 +64,7 @@ rt_s da_oracle_utils_set_with_last_error(rt_n32 error_status, void *error_handle
 			break;
 		}
 
+		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		if (RT_UNLIKELY(!rt_last_error_message_set(status_name))) {
 			rt_last_error_message_set_with_last_error();
 			goto error;
