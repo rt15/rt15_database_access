@@ -326,7 +326,7 @@ static rt_s zz_main(rt_un argc, const rt_char *argv[])
 	}
 
 	if (display_help) {
-		if (RT_UNLIKELY(!rt_console_write_string(_R("rda_tests <-h|--host-name> HOST_NAME <-P|--port> PORT <-d|--database> DATABASE <-u|--user-name> USER_NAME <-p|--password> PASSWORD <-t|--database-type> DATABASE_TYPE\n"))))
+		if (RT_UNLIKELY(!rt_console_write_str(_R("rda_tests <-h|--host-name> HOST_NAME <-P|--port> PORT <-d|--database> DATABASE <-u|--user-name> USER_NAME <-p|--password> PASSWORD <-t|--database-type> DATABASE_TYPE\n"))))
 			goto error;
 
 	} else {
