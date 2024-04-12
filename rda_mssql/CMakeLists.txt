@@ -39,6 +39,7 @@ link_directories(${PARENT_DIR}/rt15_portable_runtime/rpr/lib)
 
 link_libraries(rpr${BINARY_SUFFIX})
 if(WIN32)
+        # On Windows, at runtime, you need Microsoft ODBC Driver 17 for SQL Server.
         link_libraries(odbc32)
 else()
         # To compile:
