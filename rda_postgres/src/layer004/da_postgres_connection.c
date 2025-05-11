@@ -8,48 +8,45 @@ static rt_s da_postgres_connection_execute(struct da_connection *connection, con
 {
 	PGconn *pg_conn = connection->u.postgres.pg_conn;
 	PGresult *pg_result = RT_NULL;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	pg_result = PQexec(pg_conn, sql);
 	if (RT_UNLIKELY(!pg_result)) {
 		da_postgres_utils_set_with_last_error(connection);
-		goto error;
+		goto end;
 	}
 	if (RT_UNLIKELY(PQresultStatus(pg_result) != PGRES_COMMAND_OK)) {
 		da_postgres_utils_set_with_last_error(connection);
-		goto error;
+		goto end;
 	}
 
 	ret = RT_OK;
-free:
+end:
 	if (pg_result) {
 		/* PQClear returns void. */
 		PQclear(pg_result);
 	}
-	return ret;
 
-error:
-	ret = RT_FAILED;
-	goto free;
+	return ret;
 }
 
 rt_s da_postgres_connection_open(struct da_connection *connection)
 {
 	struct da_data_source *data_source = connection->data_source;
 	PGconn *pg_conn = RT_NULL;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (RT_UNLIKELY(connection->opened)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	pg_conn = PQconnectdbParams(data_source->u.postgres.keywords, data_source->u.postgres.values, 1);
 	if (RT_UNLIKELY(!pg_conn)) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 	/* The connection will be closed in da_postgres_connection_free. */
 	connection->u.postgres.pg_conn = pg_conn;
@@ -57,31 +54,27 @@ rt_s da_postgres_connection_open(struct da_connection *connection)
 
 	if (RT_UNLIKELY(PQstatus(pg_conn) != CONNECTION_OK)) {
 		da_postgres_utils_set_with_last_error(connection);
-		goto error;
+		goto end;
 	}
 
 	if (!connection->auto_commit) {
 		if (RT_UNLIKELY(!da_postgres_connection_execute(connection, "begin")))
-			goto error;
+			goto end;
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_postgres_connection_create_statement(struct da_connection *connection, struct da_statement *statement)
 {
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (RT_UNLIKELY(!connection->opened)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	statement->execute = &da_postgres_statement_execute;
@@ -99,87 +92,71 @@ rt_s da_postgres_connection_create_statement(struct da_connection *connection, s
 	statement->u.postgres.param_lengths = RT_NULL;
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_postgres_connection_prepare_statement(struct da_connection *connection, struct da_statement *statement, const rt_char8 *sql)
 {
 	struct rt_uuid uuid;
 	rt_un buffer_size;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (RT_UNLIKELY(!da_postgres_connection_create_statement(connection, statement)))
-		goto error;
+		goto end;
 
 	statement->prepared_sql = sql;
 
 	if (RT_UNLIKELY(!rt_uuid_create(&uuid))) {
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	buffer_size = 0;
 	if (RT_UNLIKELY(!rt_uuid_append8(&uuid, statement->u.postgres.statement_name, 64, &buffer_size))) {
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	statement->u.postgres.statement_name_size = buffer_size;
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_postgres_connection_commit(struct da_connection *connection)
 {
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 	
 	if (RT_UNLIKELY(!da_postgres_connection_execute(connection, "commit")))
-		goto error;
+		goto end;
 
 	if (!connection->auto_commit) {
 		if (RT_UNLIKELY(!da_postgres_connection_execute(connection, "begin")))
-			goto error;
+			goto end;
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_postgres_connection_rollback(struct da_connection *connection)
 {
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 	
 	if (RT_UNLIKELY(!da_postgres_connection_execute(connection, "rollback")))
-		goto error;
+		goto end;
 
 	if (!connection->auto_commit) {
 		if (RT_UNLIKELY(!da_postgres_connection_execute(connection, "begin")))
-			goto error;
+			goto end;
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_postgres_connection_free(struct da_connection *connection)

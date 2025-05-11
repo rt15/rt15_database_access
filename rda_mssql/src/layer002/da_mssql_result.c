@@ -12,7 +12,7 @@ rt_s da_mssql_result_bind(struct da_result *result, struct da_binding *bindings,
 	void *buffer;
 	SQLLEN buffer_capacity;
 	SQLRETURN status;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	result->bindings = bindings;
 	result->bindings_size = bindings_size;
@@ -33,22 +33,18 @@ rt_s da_mssql_result_bind(struct da_result *result, struct da_binding *bindings,
 		default:
 			rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 			rt_last_error_message_set_with_last_error();
-			goto error;
+			goto end;
 		}
 		status = SQLBindCol(statement_handle, column_index + 1, c_type, buffer, buffer_capacity, (SQLLEN*)&bindings[column_index].reserved);
 		if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 			da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
-			goto error;
+			goto end;
 		}
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_mssql_result_fetch(struct da_result *result, rt_b *end_of_rows)
@@ -58,7 +54,7 @@ rt_s da_mssql_result_fetch(struct da_result *result, rt_b *end_of_rows)
 	SQLRETURN status;
 	rt_un column_index;
 	struct da_binding *bindings = result->bindings;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	status = SQLFetch(statement_handle);
 	if (status == SQL_NO_DATA) {
@@ -66,7 +62,7 @@ rt_s da_mssql_result_fetch(struct da_result *result, rt_b *end_of_rows)
 	} else {
 		if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 			da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
-			goto error;
+			goto end;
 		}
 
 		*end_of_rows = RT_FALSE;
@@ -85,19 +81,15 @@ rt_s da_mssql_result_fetch(struct da_result *result, rt_b *end_of_rows)
 				default:
 					rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 					rt_last_error_message_set_with_last_error();
-					goto error;
+					goto end;
 				}
 			}
 		}
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_mssql_result_free(RT_UNUSED struct da_result *result)

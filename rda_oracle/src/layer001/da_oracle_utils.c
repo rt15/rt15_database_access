@@ -11,26 +11,26 @@ rt_s da_oracle_utils_set_with_last_error(rt_n32 error_status, void *error_handle
 	rt_char *output;
 	rt_un output_size;
 	rt_char *status_name;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (error_status == OCI_ERROR && error_handle) {
 
 		if (RT_UNLIKELY(OCIErrorGet(error_handle, 1, RT_NULL, &errcode, (OraText*)buffer8, RT_CHAR8_HALF_BIG_STRING_SIZE, error_handle_type) != OCI_SUCCESS)) {
 			rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 			rt_last_error_message_set_with_last_error();
-			goto error;
+			goto end;
 		}
 
 		buffer8_size = rt_char8_get_size(buffer8);
 		if (RT_UNLIKELY(!rt_encoding_decode(buffer8, buffer8_size, RT_ENCODING_SYSTEM_DEFAULT, buffer, RT_CHAR_HALF_BIG_STRING_SIZE, RT_NULL, RT_NULL, &output, &output_size, RT_NULL))) {
 			rt_last_error_message_set_with_last_error();
-			goto error;
+			goto end;
 		}
 
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		if (RT_UNLIKELY(!rt_last_error_message_set(buffer))) {
 			rt_last_error_message_set_with_last_error();
-			goto error;
+			goto end;
 		}
 
 	} else {
@@ -67,15 +67,11 @@ rt_s da_oracle_utils_set_with_last_error(rt_n32 error_status, void *error_handle
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		if (RT_UNLIKELY(!rt_last_error_message_set(status_name))) {
 			rt_last_error_message_set_with_last_error();
-			goto error;
+			goto end;
 		}
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }

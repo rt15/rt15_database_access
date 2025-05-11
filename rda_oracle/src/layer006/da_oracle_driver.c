@@ -13,7 +13,7 @@ rt_s da_oracle_driver_create_data_source(struct da_driver *driver, struct da_dat
 	rt_b server_handle_created = RT_FALSE;
 	rt_un connection_string_size;
 	sword status;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	data_source->open = &da_oracle_data_source_open;
 	data_source->create_connection = &da_oracle_data_source_create_connection;
@@ -26,31 +26,31 @@ rt_s da_oracle_driver_create_data_source(struct da_driver *driver, struct da_dat
 	data_source->u.oracle.user_name_size = rt_char8_get_size(user_name);
 	if (RT_UNLIKELY(!rt_char8_copy(user_name, data_source->u.oracle.user_name_size, data_source->u.oracle.user_name, DA_IDENTIFIER_SIZE))) {
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 	data_source->u.oracle.password_size = rt_char8_get_size(password);
 	if (RT_UNLIKELY(!rt_char8_copy(password, data_source->u.oracle.password_size, data_source->u.oracle.password, DA_IDENTIFIER_SIZE))) {
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	/* Build the connection string. */
 	connection_string_size = rt_char8_get_size(host_name);
 	if (RT_UNLIKELY(!rt_char8_copy(host_name, connection_string_size, data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE))) {
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 	if (RT_UNLIKELY(!rt_char8_append_char(':', data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE, &connection_string_size))) {
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 	if (RT_UNLIKELY(!rt_char8_append_un(port, 10, data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE, &connection_string_size))) {
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 	if (RT_UNLIKELY(!rt_char8_append(database, rt_char8_get_size(database), data_source->u.oracle.connection_string, DA_CONNECTION_STRING_SIZE, &connection_string_size))) {
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 	data_source->u.oracle.connection_string_size = connection_string_size;
 
@@ -58,7 +58,7 @@ rt_s da_oracle_driver_create_data_source(struct da_driver *driver, struct da_dat
 	status = OCIHandleAlloc(environment_handle, (void**)&error_handle, OCI_HTYPE_ERROR, 0, NULL);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		da_oracle_utils_set_with_last_error(status, environment_handle, OCI_HTYPE_ENV);
-		goto error;
+		goto end;
 	}
 	error_handle_created = RT_TRUE;
 
@@ -66,7 +66,7 @@ rt_s da_oracle_driver_create_data_source(struct da_driver *driver, struct da_dat
 	status = OCIHandleAlloc(environment_handle, (void**)&server_handle, OCI_HTYPE_SERVER, 0, NULL);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		da_oracle_utils_set_with_last_error(status, environment_handle, OCI_HTYPE_ENV);
-		goto error;
+		goto end;
 	}
 	server_handle_created = RT_TRUE;
 
@@ -74,46 +74,39 @@ rt_s da_oracle_driver_create_data_source(struct da_driver *driver, struct da_dat
 	data_source->u.oracle.server_handle = server_handle;
 
 	ret = RT_OK;
-free:
+end:
+	if (RT_UNLIKELY(!ret)) {
+		if (server_handle_created) {
+			OCIHandleFree(server_handle, OCI_HTYPE_SERVER);
+		}
+		if (error_handle_created) {
+			OCIHandleFree(error_handle, OCI_HTYPE_ERROR);
+		}
+	}
+
 	return ret;
-
-error:
-	ret = RT_FAILED;
-
-	if (server_handle_created) {
-		OCIHandleFree(server_handle, OCI_HTYPE_SERVER);
-	}
-	if (error_handle_created) {
-		OCIHandleFree(error_handle, OCI_HTYPE_ERROR);
-	}
-
-	goto free;
 }
 
 rt_s da_oracle_driver_free(struct da_driver *driver)
 {
 	sword status;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	status = OCIHandleFree((OCIEnv*)driver->u.oracle.environment_handle, OCI_HTYPE_ENV);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		da_oracle_utils_set_with_last_error(status, RT_NULL, 0);
-		goto error;
+		goto end;
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_oracle_driver_create(struct da_driver *driver)
 {
 	sword status;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	driver->create_data_source = &da_oracle_driver_create_data_source;
 	driver->free = &da_oracle_driver_free;
@@ -122,14 +115,10 @@ rt_s da_oracle_driver_create(struct da_driver *driver)
 	status = OCIEnvCreate((OCIEnv**)&driver->u.oracle.environment_handle, OCI_DEFAULT, NULL, NULL, NULL, NULL, 0, NULL);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		da_oracle_utils_set_with_last_error(status, RT_NULL, 0);
-		goto error;
+		goto end;
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }

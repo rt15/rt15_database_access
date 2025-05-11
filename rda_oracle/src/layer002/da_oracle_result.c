@@ -14,7 +14,7 @@ rt_s da_oracle_result_bind(struct da_result *result, struct da_binding *bindings
 	OCIDefine* define_handle;
 	ub2 *rlenp;
 	sb2 *indp;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	result->bindings = bindings;
 	result->bindings_size = bindings_size;
@@ -42,22 +42,18 @@ rt_s da_oracle_result_bind(struct da_result *result, struct da_binding *bindings
 		default:
 			rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 			rt_last_error_message_set_with_last_error();
-			goto error;
+			goto end;
 		}
 
 		if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 			da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
-			goto error;
+			goto end;
 		}
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_oracle_result_fetch(struct da_result *result, rt_b *end_of_rows)
@@ -69,7 +65,7 @@ rt_s da_oracle_result_fetch(struct da_result *result, rt_b *end_of_rows)
 	sword status;
 	rt_un column_index;
 	sb2 indicator;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	status = OCIStmtFetch(statement_handle, error_handle, 1, OCI_FETCH_NEXT, OCI_DEFAULT);
 	if (status == OCI_NO_DATA) {
@@ -78,7 +74,7 @@ rt_s da_oracle_result_fetch(struct da_result *result, rt_b *end_of_rows)
 		*end_of_rows = RT_FALSE;
 		if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 			da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
-			goto error;
+			goto end;
 		}
 
 		/* We stored the indicator value in the is_null field. */
@@ -98,18 +94,14 @@ rt_s da_oracle_result_fetch(struct da_result *result, rt_b *end_of_rows)
 				/* Provided buffer was too small. */
 				rt_error_set_last(RT_ERROR_INSUFFICIENT_BUFFER);
 				rt_last_error_message_set_with_last_error();
-				goto error;
+				goto end;
 			}
 		}
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_oracle_result_free(RT_UNUSED struct da_result *result)

@@ -11,29 +11,25 @@ rt_s da_oracle_data_source_open(struct da_data_source *data_source)
 	rt_char8 *connection_string = data_source->u.oracle.connection_string;
 	rt_un connection_string_size = data_source->u.oracle.connection_string_size;
 	sword status;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (RT_UNLIKELY(data_source->opened)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	/* Attach server handle to host/port/database. */
 	status = OCIServerAttach(server_handle, error_handle, (OraText*)connection_string, connection_string_size, OCI_DEFAULT);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		da_oracle_utils_set_with_last_error(status, error_handle, OCI_HTYPE_ERROR);
-		goto error;
+		goto end;
 	}
 	data_source->opened = RT_TRUE;
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source, struct da_connection *connection, rt_b auto_commit)
@@ -47,12 +43,12 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	OCISession *session_handle;
 	rt_b session_handle_created = RT_FALSE;
 	sword status;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (RT_UNLIKELY(!data_source->opened)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	connection->open = &da_oracle_connection_open;
@@ -72,7 +68,7 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	status = OCIHandleAlloc(environment_handle, (void**)&error_handle, OCI_HTYPE_ERROR, 0, NULL);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		da_oracle_utils_set_with_last_error(status, environment_handle, OCI_HTYPE_ENV);
-		goto error;
+		goto end;
 	}
 	error_handle_created = RT_TRUE;
 
@@ -80,7 +76,7 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	status = OCIHandleAlloc(environment_handle, (void**)&service_context_handle, OCI_HTYPE_SVCCTX, 0, NULL);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		da_oracle_utils_set_with_last_error(status, environment_handle, OCI_HTYPE_ENV);
-		goto error;
+		goto end;
 	}
 	service_context_handle_created = RT_TRUE;
 
@@ -88,14 +84,14 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	status = OCIAttrSet(service_context_handle, OCI_HTYPE_SVCCTX, server_handle, 0, OCI_ATTR_SERVER, data_source->u.oracle.error_handle);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		da_oracle_utils_set_with_last_error(status, data_source->u.oracle.error_handle, OCI_HTYPE_ERROR);
-		goto error;
+		goto end;
 	}
 
 	/* Session handle. */
 	status = OCIHandleAlloc(environment_handle, (void**)&session_handle, OCI_HTYPE_SESSION, 0, NULL);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		da_oracle_utils_set_with_last_error(status, environment_handle, OCI_HTYPE_ENV);
-		goto error;
+		goto end;
 	}
 	session_handle_created = RT_TRUE;
 
@@ -103,14 +99,14 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	status = OCIAttrSet(session_handle, OCI_HTYPE_SESSION, data_source->u.oracle.user_name, data_source->u.oracle.user_name_size, OCI_ATTR_USERNAME, data_source->u.oracle.error_handle);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		da_oracle_utils_set_with_last_error(status, data_source->u.oracle.error_handle, OCI_HTYPE_ERROR);
-		goto error;
+		goto end;
 	}
 
 	/* Set password in session */
 	status = OCIAttrSet(session_handle, OCI_HTYPE_SESSION, data_source->u.oracle.password, data_source->u.oracle.password_size, OCI_ATTR_PASSWORD, data_source->u.oracle.error_handle);
 	if (RT_UNLIKELY(status != OCI_SUCCESS)) {
 		da_oracle_utils_set_with_last_error(status, data_source->u.oracle.error_handle, OCI_HTYPE_ERROR);
-		goto error;
+		goto end;
 	}
 
 	connection->u.oracle.error_handle = error_handle;
@@ -118,23 +114,20 @@ rt_s da_oracle_data_source_create_connection(struct da_data_source *data_source,
 	connection->u.oracle.session_handle = session_handle;
 
 	ret = RT_OK;
-free:
+end:
+	if (RT_UNLIKELY(!ret)) {
+		if (session_handle_created) {
+			OCIHandleFree(session_handle, OCI_HTYPE_SESSION);
+		}
+		if (service_context_handle_created) {
+			OCIHandleFree(service_context_handle, OCI_HTYPE_SVCCTX);
+		}
+		if (error_handle_created) {
+			OCIHandleFree(error_handle, OCI_HTYPE_ERROR);
+		}
+	}
+
 	return ret;
-
-error:
-	ret = RT_FAILED;
-
-	if (session_handle_created) {
-		OCIHandleFree(session_handle, OCI_HTYPE_SESSION);
-	}
-	if (service_context_handle_created) {
-		OCIHandleFree(service_context_handle, OCI_HTYPE_SVCCTX);
-	}
-	if (error_handle_created) {
-		OCIHandleFree(error_handle, OCI_HTYPE_ERROR);
-	}
-
-	goto free;
 }
 
 rt_s da_oracle_data_source_free(struct da_data_source *data_source)

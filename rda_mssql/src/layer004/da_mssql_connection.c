@@ -13,19 +13,19 @@ rt_s da_mssql_connection_open(struct da_connection *connection)
 	rt_char8 *connection_string = data_source->u.mssql.connection_string;
 	SQLRETURN status;
 	rt_b connected = RT_FALSE;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (RT_UNLIKELY(connection->opened)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	status = SQLAllocHandle(SQL_HANDLE_DBC, environment_handle, &connection_handle);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 	connection->u.mssql.connection_handle = connection_handle;
 	connection->u.mssql.connection_handle_created = RT_TRUE;
@@ -37,13 +37,13 @@ rt_s da_mssql_connection_open(struct da_connection *connection)
 	}
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		da_mssql_utils_set_with_last_error(SQL_HANDLE_DBC, connection_handle);
-		goto error;
+		goto end;
 	}
 
 	status = SQLDriverConnect(connection_handle, RT_NULL, (SQLCHAR*)connection_string, SQL_NTS, RT_NULL, 0, RT_NULL, SQL_DRIVER_NOPROMPT);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		da_mssql_utils_set_with_last_error(SQL_HANDLE_DBC, connection_handle);
-		goto error;
+		goto end;
 	}
 	connected = RT_TRUE;
 
@@ -51,16 +51,14 @@ rt_s da_mssql_connection_open(struct da_connection *connection)
 	connection->opened = RT_TRUE;
 
 	ret = RT_OK;
-free:
-	return ret;
-
-error:
-	if (connected) {
-		SQLDisconnect(connection_handle);
+end:
+	if (RT_UNLIKELY(!ret)) {
+		if (connected) {
+			SQLDisconnect(connection_handle);
+		}
 	}
 
-	ret = RT_FAILED;
-	goto free;
+	return ret;
 }
 
 rt_s da_mssql_connection_create_statement(struct da_connection *connection, struct da_statement *statement)
@@ -68,12 +66,12 @@ rt_s da_mssql_connection_create_statement(struct da_connection *connection, stru
 	SQLHDBC connection_handle = connection->u.mssql.connection_handle;
 	SQLHSTMT statement_handle;
 	SQLRETURN status;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (RT_UNLIKELY(!connection->opened)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	statement->execute = &da_mssql_statement_execute;
@@ -91,80 +89,64 @@ rt_s da_mssql_connection_create_statement(struct da_connection *connection, stru
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	statement->u.mssql.statement_handle = statement_handle;
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_mssql_connection_prepare_statement(struct da_connection *connection, struct da_statement *statement, const rt_char8 *sql)
 {
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (RT_UNLIKELY(!da_mssql_connection_create_statement(connection, statement)))
-		goto error;
+		goto end;
 
 	statement->prepared_sql = sql;
 
 	statement->u.mssql.cumulative_row_count = 0;
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_mssql_connection_commit(struct da_connection *connection)
 {
 	SQLHDBC connection_handle = connection->u.mssql.connection_handle;
 	SQLRETURN status;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	status = SQLEndTran(SQL_HANDLE_DBC, connection_handle, SQL_COMMIT);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		da_mssql_utils_set_with_last_error(SQL_HANDLE_DBC, connection_handle);
-		goto error;
+		goto end;
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_mssql_connection_rollback(struct da_connection *connection)
 {
 	SQLHDBC connection_handle = connection->u.mssql.connection_handle;
 	SQLRETURN status;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	status = SQLEndTran(SQL_HANDLE_DBC, connection_handle, SQL_ROLLBACK);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		da_mssql_utils_set_with_last_error(SQL_HANDLE_DBC, connection_handle);
-		goto error;
+		goto end;
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_mssql_connection_free(struct da_connection *connection)

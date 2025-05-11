@@ -14,12 +14,12 @@ static rt_s da_mssql_statement_get_row_count(struct da_statement *statement, rt_
 	SQLHSTMT statement_handle = statement->u.mssql.statement_handle;
 	SQLLEN mssql_row_count;
 	SQLRETURN status;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	status = SQLRowCount(statement_handle, &mssql_row_count);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
-		goto error;
+		goto end;
 	}
 
 	if (statement->prepared_sql) {
@@ -31,43 +31,35 @@ static rt_s da_mssql_statement_get_row_count(struct da_statement *statement, rt_
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_mssql_statement_execute(struct da_statement *statement, const rt_char8 *sql, rt_un *row_count)
 {
 	SQLHSTMT statement_handle = statement->u.mssql.statement_handle;
 	SQLRETURN status;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	status = SQLExecDirect(statement_handle, (SQLCHAR*)sql, SQL_NTS);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
-		goto error;
+		goto end;
 	}
 
 	if (row_count) {
 		if (RT_UNLIKELY(!da_mssql_statement_get_row_count(statement, row_count)))
-			goto error;
+			goto end;
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_mssql_statement_select(struct da_statement *statement, struct da_result *result, const rt_char8 *sql)
 {
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	result->bind = &da_mssql_result_bind;
 	result->fetch = &da_mssql_result_fetch;
@@ -76,15 +68,11 @@ rt_s da_mssql_statement_select(struct da_statement *statement, struct da_result 
 	result->statement = statement;
 
 	if (RT_UNLIKELY(!da_mssql_statement_execute(statement, sql, RT_NULL)))
-		goto error;
+		goto end;
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 static rt_s da_mssql_statement_execute_prepared_with_one_batch(struct da_statement *statement, enum da_binding_type *binding_types, rt_un binding_types_size, void **batches, rt_un *row_count)
@@ -95,13 +83,13 @@ static rt_s da_mssql_statement_execute_prepared_with_one_batch(struct da_stateme
 	rt_un column_index;
 	SQLSMALLINT c_type;
 	SQLSMALLINT sql_type;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (!statement->prepared) {
 		status = SQLPrepare(statement_handle, (SQLCHAR*)statement->prepared_sql, SQL_NTS);
 		if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 			da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
-			goto error;
+			goto end;
 		}
 		statement->prepared = RT_TRUE;
 	}
@@ -109,12 +97,12 @@ static rt_s da_mssql_statement_execute_prepared_with_one_batch(struct da_stateme
 	status = SQLSetStmtAttr(statement_handle, SQL_ATTR_PARAMSET_SIZE, (SQLPOINTER)1, SQL_IS_UINTEGER);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
-		goto error;
+		goto end;
 	}
 
 	if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&lengths, binding_types_size * sizeof(SQLLEN)))) {
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	for (column_index = 0; column_index < binding_types_size; column_index++) {
@@ -131,7 +119,7 @@ static rt_s da_mssql_statement_execute_prepared_with_one_batch(struct da_stateme
 		default:
 			rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 			rt_last_error_message_set_with_last_error();
-			goto error;
+			goto end;
 		}
 
 		if (batches[column_index]) {
@@ -145,7 +133,7 @@ static rt_s da_mssql_statement_execute_prepared_with_one_batch(struct da_stateme
 			default:
 				rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 				rt_last_error_message_set_with_last_error();
-				goto error;
+				goto end;
 			}
 		} else {
 			lengths[column_index] = SQL_NULL_DATA;
@@ -154,33 +142,29 @@ static rt_s da_mssql_statement_execute_prepared_with_one_batch(struct da_stateme
 		status = SQLBindParameter(statement_handle, column_index + 1, SQL_PARAM_INPUT, c_type, sql_type, 0, 0, batches[column_index], 0, &lengths[column_index]);
 		if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 			da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
-			goto error;
+			goto end;
 		}
 	}
 
 	status = SQLExecute(statement_handle);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
-		goto error;
+		goto end;
 	}
 
 	if (row_count) {
 		if (RT_UNLIKELY(!da_mssql_statement_get_row_count(statement, row_count)))
-			goto error;
+			goto end;
 	}
 
 	ret = RT_OK;
-free:
-	if (RT_UNLIKELY(!rt_static_heap_free((void**)&lengths) && ret)) {
+end:
+	if (RT_UNLIKELY(!rt_static_heap_free((void**)&lengths))) {
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		ret = RT_FAILED;
 	}
 
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 static rt_s da_mssql_statement_execute_prepared_with_multiple_batches(struct da_statement *statement, enum da_binding_type *binding_types, rt_un binding_types_size, void ***batches, rt_un batches_size, rt_un *row_count)
@@ -196,13 +180,13 @@ static rt_s da_mssql_statement_execute_prepared_with_multiple_batches(struct da_
 	SQLINTEGER *n_values;
 	SQLSMALLINT c_type;
 	SQLSMALLINT sql_type;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (!statement->prepared) {
 		status = SQLPrepare(statement_handle, (SQLCHAR*)statement->prepared_sql, SQL_NTS);
 		if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 			da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
-			goto error;
+			goto end;
 		}
 		statement->prepared = RT_TRUE;
 	}
@@ -210,12 +194,12 @@ static rt_s da_mssql_statement_execute_prepared_with_multiple_batches(struct da_
 	status = SQLSetStmtAttr(statement_handle, SQL_ATTR_PARAMSET_SIZE, (SQLPOINTER)batches_size, SQL_IS_UINTEGER);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
-		goto error;
+		goto end;
 	}
 
 	if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&bindings, binding_types_size * sizeof(struct da_mssql_statement_binding)))) {
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	for (column_index = 0; column_index < binding_types_size; column_index++) {
@@ -227,7 +211,7 @@ static rt_s da_mssql_statement_execute_prepared_with_multiple_batches(struct da_
 
 		if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&bindings[column_index].lengths, batches_size * sizeof(SQLLEN)))) {
 			rt_last_error_message_set_with_last_error();
-			goto error;
+			goto end;
 		}
 
 		nulls_only = RT_TRUE;
@@ -248,7 +232,7 @@ static rt_s da_mssql_statement_execute_prepared_with_multiple_batches(struct da_
 				default:
 					rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 					rt_last_error_message_set_with_last_error();
-					goto error;
+					goto end;
 				}
 			} else {
 				bindings[column_index].lengths[row_index] = SQL_NULL_DATA;
@@ -264,7 +248,7 @@ static rt_s da_mssql_statement_execute_prepared_with_multiple_batches(struct da_
 				sql_type = SQL_VARCHAR;
 				if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&bindings[column_index].values, batches_size * max_length))) {
 					rt_last_error_message_set_with_last_error();
-					goto error;
+					goto end;
 				}
 				break;
 			case DA_BINDING_TYPE_N32:
@@ -272,14 +256,14 @@ static rt_s da_mssql_statement_execute_prepared_with_multiple_batches(struct da_
 				sql_type = SQL_INTEGER;
 				if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&bindings[column_index].values, batches_size * sizeof(SQLINTEGER)))) {
 					rt_last_error_message_set_with_last_error();
-					goto error;
+					goto end;
 				}
 				n_values = (SQLINTEGER*)bindings[column_index].values;
 				break;
 			default:
 				rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 				rt_last_error_message_set_with_last_error();
-				goto error;
+				goto end;
 			}
 			
 			for (row_index = 0; row_index < batches_size; row_index++) {
@@ -288,7 +272,7 @@ static rt_s da_mssql_statement_execute_prepared_with_multiple_batches(struct da_
 					case DA_BINDING_TYPE_CHAR8:
 						if (RT_UNLIKELY(!rt_char8_copy(batches[row_index][column_index], bindings[column_index].lengths[row_index], &bindings[column_index].values[row_index * max_length], max_length))) {
 							rt_last_error_message_set_with_last_error();
-							goto error;
+							goto end;
 						}
 						break;
 					case DA_BINDING_TYPE_N32:
@@ -297,7 +281,7 @@ static rt_s da_mssql_statement_execute_prepared_with_multiple_batches(struct da_
 					default:
 						rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 						rt_last_error_message_set_with_last_error();
-						goto error;
+						goto end;
 					}
 				}
 			}
@@ -306,46 +290,42 @@ static rt_s da_mssql_statement_execute_prepared_with_multiple_batches(struct da_
 		status = SQLBindParameter(statement_handle, column_index + 1, SQL_PARAM_INPUT, c_type, sql_type, max_length, 0, bindings[column_index].values, max_length, bindings[column_index].lengths);
 		if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 			da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
-			goto error;
+			goto end;
 		}
 	}
 
 	status = SQLExecute(statement_handle);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		da_mssql_utils_set_with_last_error(SQL_HANDLE_STMT, statement_handle);
-		goto error;
+		goto end;
 	}
 
 	if (row_count) {
 		if (RT_UNLIKELY(!da_mssql_statement_get_row_count(statement, row_count)))
-			goto error;
+			goto end;
 	}
 
 	ret = RT_OK;
-free:
+end:
 
 	if (bindings) {
 		for (column_index = 0; column_index < binding_types_size; column_index++) {
-			if (RT_UNLIKELY(!rt_static_heap_free((void**)&bindings[column_index].lengths) && ret)) {
+			if (RT_UNLIKELY(!rt_static_heap_free((void**)&bindings[column_index].lengths))) {
 				rt_last_error_message_set_with_last_error();
-				goto error;
+				ret = RT_FAILED;
 			}
-			if (RT_UNLIKELY(!rt_static_heap_free((void**)&bindings[column_index].values) && ret)) {
+			if (RT_UNLIKELY(!rt_static_heap_free((void**)&bindings[column_index].values))) {
 				rt_last_error_message_set_with_last_error();
-				goto error;
+				ret = RT_FAILED;
 			}
 		}
-		if (RT_UNLIKELY(!rt_static_heap_free((void**)&bindings) && ret)) {
+		if (RT_UNLIKELY(!rt_static_heap_free((void**)&bindings))) {
 			rt_last_error_message_set_with_last_error();
-			goto error;
+			ret = RT_FAILED;
 		}
 	}
 
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_mssql_statement_execute_prepared(struct da_statement *statement, enum da_binding_type *binding_types, rt_un binding_types_size, void ***batches, rt_un batches_size, rt_un *row_count)
@@ -362,7 +342,7 @@ rt_s da_mssql_statement_execute_prepared(struct da_statement *statement, enum da
 
 rt_s da_mssql_statement_select_prepared(struct da_statement *statement, struct da_result *result, enum da_binding_type *binding_types, rt_un binding_types_size, void **bindings)
 {
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	result->bind = &da_mssql_result_bind;
 	result->fetch = &da_mssql_result_fetch;
@@ -371,35 +351,27 @@ rt_s da_mssql_statement_select_prepared(struct da_statement *statement, struct d
 	result->statement = statement;
 
 	if (RT_UNLIKELY(!da_mssql_statement_execute_prepared_with_one_batch(statement, binding_types, binding_types_size, bindings, RT_NULL)))
-		goto error;
+		goto end;
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_mssql_statement_free(struct da_statement *statement)
 {
 	SQLHSTMT statement_handle = statement->u.mssql.statement_handle;
 	SQLRETURN status;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	status = SQLFreeHandle(SQL_HANDLE_STMT, statement_handle);
 	if (RT_UNLIKELY(!SQL_SUCCEEDED(status))) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }

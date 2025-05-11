@@ -21,7 +21,7 @@ rt_s da_postgres_result_fetch(struct da_result *result, rt_b *end_of_rows)
 	const rt_char8 *value;
 	int value_size;
 	rt_n n;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (current_row >= result->u.postgres.row_count) {
 		*end_of_rows = RT_TRUE;
@@ -37,33 +37,33 @@ rt_s da_postgres_result_fetch(struct da_result *result, rt_b *end_of_rows)
 				value = PQgetvalue(pg_result, current_row, column_index);
 				if (RT_UNLIKELY(!value)) {
 					da_postgres_utils_set_with_last_error(connection);
-					goto error;
+					goto end;
 				}
 				switch (bindings[column_index].type) {
 				case DA_BINDING_TYPE_CHAR8:
 					value_size = PQgetlength(pg_result, current_row, column_index);
 					if (RT_UNLIKELY(!rt_char8_copy(value, value_size, bindings[column_index].u.char8.buffer, bindings[column_index].u.char8.buffer_capacity))) {
 						rt_last_error_message_set_with_last_error();
-						goto error;
+						goto end;
 					}
 					bindings[column_index].u.char8.buffer_size = value_size;
 					break;
 				case DA_BINDING_TYPE_N32:
 					if (RT_UNLIKELY(!rt_char8_convert_to_n(value, &n))) {
 						rt_last_error_message_set_with_last_error();
-						goto error;
+						goto end;
 					}
 					if (RT_UNLIKELY(n < RT_TYPE_MIN_N32 || n > RT_TYPE_MAX_N32)) {
 						rt_error_set_last(RT_ERROR_ARITHMETIC_OVERFLOW);
 						rt_last_error_message_set_with_last_error();
-						goto error;
+						goto end;
 					}
 					bindings[column_index].u.n32.value = (rt_n32)n;
 					break;
 				default:
 					rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 					rt_last_error_message_set_with_last_error();
-					goto error;
+					goto end;
 				}
 			}
 		}
@@ -72,12 +72,8 @@ rt_s da_postgres_result_fetch(struct da_result *result, rt_b *end_of_rows)
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_postgres_result_free(struct da_result *result)

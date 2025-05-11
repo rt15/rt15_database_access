@@ -16,58 +16,52 @@ static rt_s da_postgres_statement_execute_internal(struct da_connection *connect
 	PGconn *pg_conn = connection->u.postgres.pg_conn;
 	PGresult *local_pg_result = RT_NULL;
 	ExecStatusType status;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	local_pg_result = PQexec(pg_conn, sql);
 
 	if (RT_UNLIKELY(!local_pg_result)) {
 		da_postgres_utils_set_with_last_error(connection);
-		goto error;
+		goto end;
 	}
 
 	status = PQresultStatus(local_pg_result);
 	if (RT_UNLIKELY(status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK)) {
 		da_postgres_utils_set_with_last_error(connection);
-		goto error;
+		goto end;
 	}
 
 	*pg_result = local_pg_result;
 
 	ret = RT_OK;
-free:
+end:
+	if (RT_UNLIKELY(!ret)) {
+		if (local_pg_result)
+			PQclear(local_pg_result);
+	}
+
 	return ret;
-
-error:
-	if (local_pg_result)
-		PQclear(local_pg_result);
-
-	ret = RT_FAILED;
-	goto free;
 }
 
 static rt_s da_postgres_statement_get_row_count(PGresult *pg_result, rt_un *row_count)
 {
 	const rt_char8* affected_rows;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	affected_rows = PQcmdTuples(pg_result);
 	if (RT_UNLIKELY(!rt_char8_get_size(affected_rows))) {
 		rt_error_set_last(RT_ERROR_FUNCTION_FAILED);
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 	if (RT_UNLIKELY(!rt_char8_convert_to_un(affected_rows, row_count))) {
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_postgres_statement_execute(struct da_statement *statement, const rt_char8 *sql, rt_un *row_count)
@@ -75,29 +69,25 @@ rt_s da_postgres_statement_execute(struct da_statement *statement, const rt_char
 	struct da_connection *connection = statement->connection;
 	PGresult *pg_result;
 	rt_b pg_result_created = RT_FALSE;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (RT_UNLIKELY(!da_postgres_statement_execute_internal(connection, sql, &pg_result)))
-		goto error;
+		goto end;
 	pg_result_created = RT_TRUE;
 
 	if (row_count) {
 		if (RT_UNLIKELY(!da_postgres_statement_get_row_count(pg_result, row_count)))
-			goto error;
+			goto end;
 	}
 
 	ret = RT_OK;
-free:
+end:
 	if (pg_result_created) {
-		pg_result_created = RT_FALSE;
 		/* PQclear returns void. */
 		PQclear(pg_result);
 	}
-	return ret;
 
-error:
-	ret = RT_FAILED;
-	goto free;
+	return ret;
 }
 
 rt_s da_postgres_statement_select(struct da_statement *statement, struct da_result *result, const rt_char8 *sql)
@@ -105,7 +95,7 @@ rt_s da_postgres_statement_select(struct da_statement *statement, struct da_resu
 	struct da_connection *connection = statement->connection;
 	PGresult *pg_result;
 	rt_b pg_result_created = RT_FALSE;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	result->bind = &da_postgres_result_bind;
 	result->fetch = &da_postgres_result_fetch;
@@ -114,7 +104,7 @@ rt_s da_postgres_statement_select(struct da_statement *statement, struct da_resu
 	result->statement = statement;
 
 	if (RT_UNLIKELY(!da_postgres_statement_execute_internal(connection, sql, &pg_result)))
-		goto error;
+		goto end;
 	pg_result_created = RT_TRUE;
 
 	result->u.postgres.pg_result = pg_result;
@@ -122,15 +112,13 @@ rt_s da_postgres_statement_select(struct da_statement *statement, struct da_resu
 	result->u.postgres.current_row = 0;
 
 	ret = RT_OK;
-free:
+end:
+	if (RT_UNLIKELY(!ret)) {
+		if (pg_result_created)
+			PQclear(pg_result);
+	}
+
 	return ret;
-
-error:
-	if (pg_result_created)
-		PQclear(pg_result);
-
-	ret = RT_FAILED;
-	goto free;
 }
 
 /**
@@ -141,7 +129,7 @@ static rt_s da_postgres_statement_prepare_value(enum da_binding_type *binding_ty
 	rt_un row_index;
 	rt_un column_index;
 	rt_n32 *n32_value;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	for (row_index = 0; row_index < batches_size; row_index++) {
 		for (column_index = 0; column_index < binding_types_size; column_index++) {
@@ -156,19 +144,15 @@ static rt_s da_postgres_statement_prepare_value(enum da_binding_type *binding_ty
 					default:
 						rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 						rt_last_error_message_set_with_last_error();
-						goto error;
+						goto end;
 				}
 			}
 		}
 	}
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement *statement, enum da_binding_type *binding_types, rt_un binding_types_size, void ***batches, rt_un batches_size, rt_un *row_count, PGresult **pg_result)
@@ -187,12 +171,12 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 	rt_un local_row_count;
 	rt_un column_index;
 	rt_un row_index;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (RT_UNLIKELY(!batches_size)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	/* We prepare it if it has not been prepared already. */
@@ -200,11 +184,11 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 
 		if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&statement->u.postgres.param_formats, binding_types_size * sizeof(rt_n32)))) {
 			rt_last_error_message_set_with_last_error();
-			goto error;
+			goto end;
 		}
 		if (RT_UNLIKELY(!rt_static_heap_alloc((void**)&statement->u.postgres.param_lengths, binding_types_size * sizeof(rt_n32)))) {
 			rt_last_error_message_set_with_last_error();
-			goto error;
+			goto end;
 		}
 
 		/* We use param_formats temporarily for param_types. */
@@ -221,7 +205,7 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 			default:
 				rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 				rt_last_error_message_set_with_last_error();
-				goto error;
+				goto end;
 			}
 		}
 
@@ -229,13 +213,13 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 
 		if (RT_UNLIKELY(!prepare_pg_result)) {
 			da_postgres_utils_set_with_last_error(connection);
-			goto error;
+			goto end;
 		}
 
 		status = PQresultStatus(prepare_pg_result);
 		if (RT_UNLIKELY(status != PGRES_COMMAND_OK)) {
 			da_postgres_utils_set_with_last_error(connection);
-			goto error;
+			goto end;
 		}
 		statement->prepared = RT_TRUE;
 
@@ -253,13 +237,13 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 				default:
 					rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 					rt_last_error_message_set_with_last_error();
-					goto error;
+					goto end;
 			}
 		}
 	}
 
 	if (RT_UNLIKELY(!da_postgres_statement_prepare_value(binding_types, binding_types_size, batches, batches_size)))
-		goto error;
+		goto end;
 	values_prepared = RT_TRUE;
 
 	if (row_count)
@@ -281,64 +265,60 @@ static rt_s da_postgres_statement_execute_prepared_internal(struct da_statement 
 
 		if (RT_UNLIKELY(!*pg_result)) {
 			da_postgres_utils_set_with_last_error(connection);
-			goto error;
+			goto end;
 		}
 
 		status = PQresultStatus(*pg_result);
 		if (RT_UNLIKELY(status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK)) {
 			da_postgres_utils_set_with_last_error(connection);
-			goto error;
+			goto end;
 		}
 
 		if (row_count) {
 			if (RT_UNLIKELY(!da_postgres_statement_get_row_count(*pg_result, &local_row_count)))
-				goto error;
+				goto end;
 
 			*row_count += local_row_count;
 		}
 	}
 
 	ret = RT_OK;
-free:
+end:
 	if (values_prepared) {
-		values_prepared = RT_FALSE;
-		if (RT_UNLIKELY(!da_postgres_statement_prepare_value(binding_types, binding_types_size, batches, batches_size) && ret))
-			goto error;
+		/* Restore the bytes order. */
+		if (RT_UNLIKELY(!da_postgres_statement_prepare_value(binding_types, binding_types_size, batches, batches_size)))
+			ret = RT_FAILED;
 	}
 	if (prepare_pg_result) {
 		/* PQclear returns void. */
 		PQclear(prepare_pg_result);
 	}
+
 	return ret;
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_postgres_statement_execute_prepared(struct da_statement *statement, enum da_binding_type *binding_types, rt_un binding_types_size, void ***batches, rt_un batches_size, rt_un *row_count)
 {
 	PGresult *pg_result = RT_NULL;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (RT_UNLIKELY(!da_postgres_statement_execute_prepared_internal(statement, binding_types, binding_types_size, batches, batches_size, row_count, &pg_result)))
-		goto error;
+		goto end;
 
 	ret = RT_OK;
-free:
+end:
 	if (pg_result) {
 		/* PQclear returns void. */
 		PQclear(pg_result);
 	}
+
 	return ret;
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_postgres_statement_select_prepared(struct da_statement *statement, struct da_result *result, enum da_binding_type *binding_types, rt_un binding_types_size, void **bindings)
 {
 	PGresult *pg_result = RT_NULL;
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	result->bind = &da_postgres_result_bind;
 	result->fetch = &da_postgres_result_fetch;
@@ -347,24 +327,22 @@ rt_s da_postgres_statement_select_prepared(struct da_statement *statement, struc
 	result->statement = statement;
 
 	if (RT_UNLIKELY(!da_postgres_statement_execute_prepared_internal(statement, binding_types, binding_types_size, &bindings, 1, RT_NULL, &pg_result)))
-		goto error;
+		goto end;
 
 	result->u.postgres.pg_result = pg_result;
 	result->u.postgres.row_count = PQntuples(pg_result);
 	result->u.postgres.current_row = 0;
 
 	ret = RT_OK;
-free:
-	return ret;
-
-error:
-	if (pg_result) {
-		/* PQclear returns void. */
-		PQclear(pg_result);
+end:
+	if (RT_UNLIKELY(!ret)) {
+		if (pg_result) {
+			/* PQclear returns void. */
+			PQclear(pg_result);
+		}
 	}
 
-	ret = RT_FAILED;
-	goto free;
+	return ret;
 }
 
 rt_s da_postgres_statement_free(struct da_statement *statement)

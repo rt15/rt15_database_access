@@ -5,33 +5,29 @@
 
 rt_s da_mssql_data_source_open(struct da_data_source *data_source)
 {
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (RT_UNLIKELY(data_source->opened)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	data_source->opened = RT_TRUE;
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_mssql_data_source_create_connection(struct da_data_source *data_source, struct da_connection *connection, rt_b auto_commit)
 {
-	rt_s ret;
+	rt_s ret = RT_FAILED;
 
 	if (RT_UNLIKELY(!data_source->opened)) {
 		rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 		rt_last_error_message_set_with_last_error();
-		goto error;
+		goto end;
 	}
 
 	connection->open = &da_mssql_connection_open;
@@ -51,12 +47,8 @@ rt_s da_mssql_data_source_create_connection(struct da_data_source *data_source, 
 	connection->u.mssql.connection_handle_created = RT_FALSE;
 
 	ret = RT_OK;
-free:
+end:
 	return ret;
-
-error:
-	ret = RT_FAILED;
-	goto free;
 }
 
 rt_s da_mssql_data_source_free(RT_UNUSED struct da_data_source *data_source)
