@@ -23,11 +23,13 @@ static void zz_unknown_parameter(const rt_char *parameter_name, rt_un parameter_
 	rt_error_set_last(RT_ERROR_BAD_ARGUMENTS);
 
 	buffer_size = 18;
-	if (RT_UNLIKELY(!rt_char_copy(_R("Unknown parameter "), buffer_size, buffer, RT_CHAR_HALF_BIG_STRING_SIZE))) return;
-	if (RT_UNLIKELY(!rt_char_append(parameter_name, parameter_name_size, buffer, RT_CHAR_HALF_BIG_STRING_SIZE, &buffer_size))) return;
-	if (RT_UNLIKELY(!rt_char_append_char(_R('.'), buffer, RT_CHAR_HALF_BIG_STRING_SIZE, &buffer_size))) return;
+	if (RT_UNLIKELY(!rt_char_copy(_R("Unknown parameter "), buffer_size, buffer, RT_CHAR_HALF_BIG_STRING_SIZE))) goto end;
+	if (RT_UNLIKELY(!rt_char_append(parameter_name, parameter_name_size, buffer, RT_CHAR_HALF_BIG_STRING_SIZE, &buffer_size))) goto end;
+	if (RT_UNLIKELY(!rt_char_append_char(_R('.'), buffer, RT_CHAR_HALF_BIG_STRING_SIZE, &buffer_size))) goto end;
 
 	rt_console_write_error_with_size(buffer, buffer_size);
+end:
+	return;
 }
 
 static rt_s zz_handle_parameter(const rt_char *parameter_name, const rt_char *value, const rt_char **setting)
@@ -67,7 +69,7 @@ static rt_s zz_handle_short_parameter(rt_char short_option, const rt_char *value
 {
 	rt_s ret = RT_FAILED;
 
-	if (!valid) {
+	if (RT_UNLIKELY(!valid)) {
 		zz_unknown_parameter(&short_option, 1);
 		goto end;
 	}
@@ -112,7 +114,7 @@ static rt_s zz_handle_long_parameter(const rt_char *long_option, const rt_char *
 	rt_un long_option_size = rt_char_get_size(long_option);
 	rt_s ret = RT_FAILED;
 
-	if (!valid) {
+	if (RT_UNLIKELY(!valid)) {
 		zz_unknown_parameter(long_option, long_option_size);
 		goto end;
 	}

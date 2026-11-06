@@ -91,7 +91,7 @@ RT_EXPORT rt_s da_oracle_statement_select(struct da_statement *statement, struct
 
 	result->statement = statement;
 
-	if (!RT_UNLIKELY(da_oracle_statement_execute_internal(statement_handle, error_handle, connection, sql, 0)))
+	if (RT_UNLIKELY(!da_oracle_statement_execute_internal(statement_handle, error_handle, connection, sql, 0)))
 		goto end;
 
 	ret = RT_OK;
